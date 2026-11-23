@@ -1,6 +1,6 @@
 # Context Mode
 
-**A free, local plugin for 11 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
+**A free, local plugin for 12 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
 
 [![npm downloads](https://img.shields.io/npm/dt/context-mode?label=npm%20downloads)](https://www.npmjs.com/package/context-mode) [![GitHub stars](https://img.shields.io/github/stars/mksglu/context-mode?style=flat&color=yellow)](https://github.com/mksglu/context-mode) [![Discord](https://img.shields.io/discord/1478479412700909750?label=Discord&logo=discord&color=5865f2)](https://discord.gg/DCN9jUgN5v) [![License: ELv2](https://img.shields.io/badge/License-ELv2-blue.svg)](https://github.com/mksglu/context-mode/blob/v2.2.2/LICENSE)
 
@@ -49,7 +49,7 @@ Starred by engineers at these companies: each name is the company field of 2 or 
 
 ## Install
 
-Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OMP](#install-omp) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode)
+Pick your agent: [Claude Code](#install-claude-code) · [Codex](#install-codex) · [Gemini CLI](#install-gemini) · [Qwen Code](#install-qwen) · [Pi](#install-pi) · [OMP](#install-omp) · [OpenCode](#install-opencode) · [Copilot CLI](#install-copilot-cli) · [Kiro](#install-kiro) · [VS Code](#install-vscode) · [ZCode](#install-zcode) · [Antigravity](#install-antigravity)
 
 Open its block and copy its own install command. Each block also holds the update, check and remove steps, and the [Install guide](https://contextmode.ai/docs/engine/install?utm_source=github&utm_medium=readme&utm_content=install) walks through them.
 
@@ -266,6 +266,24 @@ zcode plugins uninstall context-mode@context-mode
 Hooks ✓ (hook file) · MCP ✓ · Skills ✓
 
 </details>
+<details id="install-antigravity"><summary><b>Antigravity</b></summary>
+
+```sh
+agy plugin install https://github.com/calvinxxw/context-mode
+```
+
+```sh
+# update
+context-mode upgrade
+# check
+agy plugin list
+# remove
+agy plugin uninstall context-mode
+```
+
+Hooks ✓ (hook file) · MCP ✓ · Skills ✓
+
+</details>
 
 The npm route works for every agent:
 
@@ -286,10 +304,10 @@ Restart the agent, then run `/ctx-doctor` in it. Each check prints PASS or a fix
 <details><summary><b>How we tested the install</b></summary>
 
 Every agent gets hooks, the MCP server and the plugin skills; the last line of each block above says how.
-Hooks reach each agent in one of three ways: in the plugin package (Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi, OMP). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
+Hooks reach each agent in one of three ways: in the plugin package (Antigravity, Claude Code, Gemini CLI, Qwen Code), in a hook file (Codex, Copilot CLI, Kiro, VS Code, ZCode), or in a plugin inside the agent (OpenCode, Pi, OMP). The [Agents guide](https://contextmode.ai/docs/engine/agents?utm_source=github&utm_medium=readme&utm_content=install-agents) shows what each agent runs.
 We ran the real binary of each agent with the plugin hook: Claude Code, Codex, Gemini CLI, Qwen Code, Pi, OpenCode, Copilot CLI and ZCode. Each run used a clean temp home and a local test model, on 2.0.0-next.15. OMP 18.20.0 ran the same way with ADR-0026, and CI installs the real OMP on Linux, macOS and Windows.
 For VS Code and Kiro, the check covers the hook setup: VS Code runs the hook command with the documented payload, and kiro-cli 2.35.2 loads all 6 hook entries.
-CI runs setup, doctor, a hook and an MCP handshake for all 11 agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](https://github.com/mksglu/context-mode/blob/v2.2.2/docs/architecture/release/HOOKS-FIRE.md).
+CI runs setup, doctor, a hook and an MCP handshake for all 12 agents from the packed package on Linux, macOS and Windows. Record: [HOOKS-FIRE.md](https://github.com/mksglu/context-mode/blob/v2.2.2/docs/architecture/release/HOOKS-FIRE.md).
 Each agent uses its own install command, and [ADR-0023](https://github.com/mksglu/context-mode/blob/v2.2.2/docs/architecture/adr/ADR-0023-native-install.md) says why.
 
 </details>
@@ -323,6 +341,7 @@ Run the stats skill right after a prompt. Each agent uses its own command; the s
 
 | Agent | Command |
 |---|---|
+| Antigravity | `/ctx-stats` |
 | Claude Code | `/ctx-stats` |
 | Codex | `$ctx-stats` |
 | Copilot CLI | `/ctx-stats` |

@@ -675,14 +675,14 @@ function promiseAllObject(promisesObj) {
 }
 function randomString(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str4 = "";
+  let str5 = "";
   for (let i = 0; i < length; i++) {
-    str4 += chars[Math.floor(Math.random() * chars.length)];
+    str5 += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str4;
+  return str5;
 }
-function esc(str4) {
-  return JSON.stringify(str4);
+function esc(str5) {
+  return JSON.stringify(str5);
 }
 var captureStackTrace = Error.captureStackTrace ? Error.captureStackTrace : (..._args) => {
 };
@@ -770,8 +770,8 @@ var getParsedType = (data) => {
 };
 var propertyKeyTypes = /* @__PURE__ */ new Set(["string", "number", "symbol"]);
 var primitiveTypes = /* @__PURE__ */ new Set(["string", "number", "bigint", "boolean", "symbol", "undefined"]);
-function escapeRegex(str4) {
-  return str4.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex(str5) {
+  return str5.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -11171,7 +11171,7 @@ function readReplaceTrigger(raw) {
 }
 var REPLACE_TRIGGER_BYTES = readReplaceTrigger(process.env[REPLACE_TRIGGER_ENV]);
 var RANGE_READ_TOOLS = Object.freeze(["Read", "view"]);
-var READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range"]);
+var READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range", "StartLine", "EndLine"]);
 var SKILL_LOAD_TOOLS = Object.freeze(["Skill"]);
 var REPLACE_RETURN_BYTES = 96;
 var SHAPE_RETURN_BYTES = 256;
@@ -11457,10 +11457,10 @@ var HOOK_FAIL_PRE_EVENTS = Object.freeze(["pretooluse", "beforetool", "tool_call
 var HOOK_FAULT_ENV = "CM_HOOK_FAULT";
 var HOOK_FAULT_STAGES = Object.freeze(["decode", "project", "policy", "store", "encode"]);
 var HOOK_FAIL_TOOLS = Object.freeze({
-  shell: Object.freeze(["Bash", "bash", "shell"]),
-  read: Object.freeze(["Read", "read_file"]),
+  shell: Object.freeze(["Bash", "bash", "shell", "run_command"]),
+  read: Object.freeze(["Read", "read_file", "view_file"]),
   grep: Object.freeze(["Grep", "grep_search"]),
-  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch"])
+  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch", "read_url_content"])
 });
 function HOOK_FAIL_LINE(label2, prefix) {
   return `${DENY_PREFIX}the hook failed (${label2}). Fix: run ${prefix}ctx_doctor.`;
@@ -11502,7 +11502,7 @@ var DUMP_COUNT_FLAGS = Object.freeze(["-n", "-c", "--lines", "--bytes"]);
 var SED_COMMAND = "sed";
 var SED_QUIET_FLAGS = Object.freeze(["-n", "--quiet", "--silent"]);
 var JQ_COMMAND = "jq";
-var READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath"]);
+var READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath", "AbsolutePath", "Path"]);
 var READ_PATH_LIST_KEY = "filePaths";
 var READ_MEDIA_TYPES = Object.freeze({
   png: { exts: [".png"], sig: [{ at: 0, bytes: [137, 80, 78, 71, 13, 10, 26, 10] }] },
@@ -11522,6 +11522,7 @@ var READ_MEDIA_BY_AGENT = Object.freeze({
   gemini: READ_IMAGES_AND_PDF,
   qwen: READ_IMAGES_AND_PDF,
   opencode: READ_IMAGES_AND_PDF,
+  antigravity: READ_IMAGES_AND_PDF,
   pi: READ_IMAGES,
   omp: READ_IMAGES,
   vscode: READ_IMAGES,
@@ -11640,7 +11641,7 @@ var DECISION_ANSWERS_KEY = "answers";
 var DECISION_OPTION_KEY = "option";
 var DECISION_LABEL_JOIN = " | ";
 var RELEASE_REPO_URL = "https://github.com/mksglu/context-mode.git";
-var BUNDLE_SHA = true ? "ae2e1bb106e462a19ab3c042e371cd8a7f691074" : void 0;
+var BUNDLE_SHA = typeof __CTX_BUNDLE_SHA__ === "string" ? __CTX_BUNDLE_SHA__ : void 0;
 var DOCTOR_CHECK_ORDER = Object.freeze(["D1", "D2", "D3", "D4", "D5", "D5b", "D6", "D7", "D8", "D9", "D10", "D11"]);
 var DOCTOR_LABEL = Object.freeze({
   D1: "version",
@@ -11801,8 +11802,10 @@ var AGENT_HOME_DIR = Object.freeze({
   zcode: [".zcode"],
   pi: [".pi"],
   opencode: [".config", "opencode"],
-  omp: [".omp"]
+  omp: [".omp"],
   // ADR-0026: OMP data and plugins live under ~/.omp
+  antigravity: [".gemini", "config"]
+  // Google Antigravity unified global config dir (App, CLI, IDE)
 });
 var UPGRADE_RESTART_LINE = "restart needed";
 var UPGRADE_HOST_AREA = "host update";
@@ -11871,16 +11874,6 @@ function D3_ROOT_DETAIL(paths) {
 }
 var unsupported = (h) => Object.freeze(h);
 var UNSUPPORTED_HOSTS = Object.freeze([
-  unsupported({
-    id: "antigravity",
-    name: "Antigravity",
-    clientNames: ["antigravity", "antigravity-client", "antigravity-cli", "agy"],
-    envVars: ["ANTIGRAVITY_CLI_ALIAS"],
-    pluginPaths: [[".gemini", "config", "plugins"], [".gemini", "antigravity", "plugins"], [".gemini", "antigravity-cli", "plugins"], [".gemini", "antigravity-ide", "plugins"]],
-    configDirs: [".gemini/antigravity", ".gemini/antigravity-cli", ".gemini/config"],
-    binaries: ["agy"],
-    source: "v1.0.169:src/adapters/client-map.ts:15-17; detect.ts:156,481-483; #1340"
-  }),
   unsupported({
     id: "cursor",
     name: "Cursor",
@@ -11958,8 +11951,9 @@ var HOOK_HOST_FILE = Object.freeze({
   zcode: { root: "home", file: [".zcode", "cli", "config.json"], key: ["hooks", "events"], shape: "zcode", timeoutKey: "timeoutMs", matcher: true },
   pi: null,
   opencode: null,
-  omp: null
+  omp: null,
   // ADR-0026: in-process, no hook file
+  antigravity: { root: "home", file: [".gemini", "config", "hooks.json"], key: [SERVER_KEY], shape: "antigravity", timeoutKey: "timeout", matcher: true }
 });
 var TOOL_HOOK_EVENTS = Object.freeze(["PreToolUse", "PostToolUse"]);
 var HOOK_MATCHER_FIELD = "matcher";
@@ -12033,7 +12027,8 @@ var UPGRADE_HOST_COMMAND = Object.freeze({
   "copilot-cli": "npm i -g context-mode && context-mode setup --agents copilot-cli",
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
-  zcode: "npm i -g context-mode && context-mode setup --agents zcode"
+  zcode: "npm i -g context-mode && context-mode setup --agents zcode",
+  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode"
 });
 var PI_GIT_PACKAGE = "git:github.com/mksglu/context-mode@release";
 var OPENCODE_GIT_SPEC = "git+https://github.com/mksglu/context-mode.git#release";
@@ -12189,6 +12184,15 @@ var CODEX_OMIT_TOOLS_FROM_FIELD = "omit_tools_from";
 var CODEX_OMIT_DEFERRED = Object.freeze(["deferred"]);
 var CODEX_APPROVAL_MODE_FIELD = "default_tools_approval_mode";
 var CODEX_APPROVAL_APPROVE = "approve";
+var ANTIGRAVITY_EAGER_TOOLS = Object.freeze({
+  ctx_execute: Object.freeze({ eager: true }),
+  ctx_batch: Object.freeze({ eager: true }),
+  ctx_index: Object.freeze({ eager: true }),
+  ctx_search: Object.freeze({ eager: true }),
+  ctx_resume: Object.freeze({ eager: true })
+});
+var ANTIGRAVITY_PLUGIN_ROOT_ENV = "PLUGIN_ROOT";
+var ANTIGRAVITY_MCP_FILE = "mcp_config.json";
 var OWN_MCP_ENTRY = Object.freeze({
   codex: { file: [".codex", "config.toml"], key: ["mcp_servers", SERVER_KEY], fields: { [CODEX_OMIT_TOOLS_FROM_FIELD]: CODEX_OMIT_DEFERRED, [CODEX_APPROVAL_MODE_FIELD]: CODEX_APPROVAL_APPROVE } },
   vscode: { file: [VSCODE_MCP_FILE], key: ["servers", SERVER_KEY] },
@@ -12198,6 +12202,11 @@ var OWN_MCP_ENTRY = Object.freeze({
     key: ["mcp", "servers", SERVER_KEY],
     fields: { type: "stdio", enabled: true, timeoutMs: EXEC_TIMEOUT_MS },
     also: [[ZCODE_MCP_FEATURE_KEY, true]]
+  },
+  antigravity: {
+    file: [".gemini", "config", ANTIGRAVITY_MCP_FILE],
+    key: ["mcpServers", SERVER_KEY],
+    fields: { tools: ANTIGRAVITY_EAGER_TOOLS }
   }
 });
 var REPORT_INVALID = "<invalid>";
@@ -12295,7 +12304,8 @@ var NATIVE_INSTALL = Object.freeze({
   "copilot-cli": ["npm i -g context-mode", "context-mode setup --agents copilot-cli"],
   vscode: ["npm i -g context-mode", "context-mode setup --agents vscode"],
   kiro: ["npm i -g context-mode", "context-mode setup --agents kiro"],
-  zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"]
+  zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"],
+  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode"]
 });
 var ISSUE_FORM_URL = `https://github.com/${ISSUE_REPO_SLUG}/issues/new?template=${ISSUE_FORM_FILE}`;
 var DOCTOR_GIT_VERSION_TIMEOUT_MS = 5e3;
@@ -12439,7 +12449,7 @@ var CtxError = class extends Error {
 import { dirname as dirname4, join as join9, relative as relative3, resolve as resolve8, sep as sep3 } from "node:path";
 
 // src/core/contracts/agents.ts
-var AGENT_IDS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp"];
+var AGENT_IDS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "antigravity"];
 
 // src/adapters/claude-code.ts
 var TOOL_NAME_PREFIX2 = "mcp__plugin_context-mode_context-mode__";
@@ -13214,6 +13224,201 @@ function encode10(ev, d, _extra) {
   }
 }
 
+// src/adapters/antigravity.ts
+var TOOL_NAME_PREFIX11 = "mcp_context-mode_";
+var PLUGIN_TOOL_NAME_PREFIX2 = "mcp_context-mode_context-mode_";
+var UNDERSCORE_TOOL_PREFIX = "mcp_context_mode_";
+var SHELL_TOOL_NAMES6 = Object.freeze(["run_command"]);
+var READ_TOOL_NAMES2 = Object.freeze(["view_file", "read_file"]);
+var GREP_TOOL_NAMES = Object.freeze(["grep_search"]);
+var WEBFETCH_TOOL_NAMES2 = Object.freeze(["read_url_content"]);
+var EDIT_TOOL_NAMES = Object.freeze([
+  "write_to_file",
+  "replace_file_content",
+  "multi_replace_file_content",
+  "write_file",
+  "edit_file"
+]);
+var EVENT_MAP = Object.freeze({
+  SessionStart: "SessionStart",
+  UserPromptSubmit: "PreInvocation",
+  PreToolUse: "PreToolUse",
+  PostToolUse: "PostToolUse"
+});
+var ANTIGRAVITY_EVENTS = {
+  SessionStart: "SessionStart",
+  PreInvocation: "UserPromptSubmit",
+  UserPromptSubmit: "UserPromptSubmit",
+  PreToolUse: "PreToolUse",
+  PostToolUse: "PostToolUse",
+  PostInvocation: "Stop",
+  Stop: "Stop"
+};
+var NATIVE_TO_CANONICAL8 = {
+  run_command: "Bash",
+  view_file: "Read",
+  read_file: "Read",
+  grep_search: "Grep",
+  read_url_content: "WebFetch",
+  write_to_file: "Write",
+  write_file: "Write",
+  replace_file_content: "Edit",
+  multi_replace_file_content: "Edit",
+  edit_file: "Edit",
+  ask_question: "AskUserQuestion"
+};
+var CALL_MCP_TOOL = "call_mcp_tool";
+var OWN_SERVER_NAMES = ["context-mode", "context-mode_context-mode"];
+var OWN_TOOL_PREFIX2 = "ctx_";
+var MCP_PREFIX4 = "mcp_";
+var MCP_SEP4 = "_";
+var EMPTY_JSON = { stdout: "{}", exitCode: 0 };
+var ALLOW_PRE_TOOL = { stdout: JSON.stringify({ decision: "allow" }), exitCode: 0 };
+function own2(p, key) {
+  return Object.hasOwn(p, key) ? p[key] : void 0;
+}
+function isRecord3(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+function str(v) {
+  return typeof v === "string" && v !== "" ? v : void 0;
+}
+function canonicalName6(name, args) {
+  if (name === CALL_MCP_TOOL) {
+    const server = str(own2(args, "ServerName"));
+    const tool = str(own2(args, "ToolName"));
+    if (server !== void 0 && tool !== void 0) {
+      if (OWN_SERVER_NAMES.includes(server) && tool.startsWith(OWN_TOOL_PREFIX2)) return tool;
+      return "mcp:" + server + ":" + tool;
+    }
+    return name;
+  }
+  if (name.startsWith(PLUGIN_TOOL_NAME_PREFIX2)) return name.slice(PLUGIN_TOOL_NAME_PREFIX2.length);
+  if (name.startsWith(TOOL_NAME_PREFIX11)) return name.slice(TOOL_NAME_PREFIX11.length);
+  if (name.startsWith(UNDERSCORE_TOOL_PREFIX)) return name.slice(UNDERSCORE_TOOL_PREFIX.length);
+  if (Object.hasOwn(NATIVE_TO_CANONICAL8, name)) return NATIVE_TO_CANONICAL8[name];
+  if (!name.startsWith(MCP_PREFIX4)) return name;
+  const rest = name.slice(MCP_PREFIX4.length);
+  const sep5 = rest.indexOf(MCP_SEP4);
+  if (sep5 <= 0 || sep5 === rest.length - 1) return name;
+  return "mcp:" + rest.slice(0, sep5) + ":" + rest.slice(sep5 + MCP_SEP4.length);
+}
+function normalizeInput(name, canonical, args) {
+  if (name === CALL_MCP_TOOL) {
+    const inner = own2(args, "Arguments");
+    if (isRecord3(inner)) return { ...args, ...inner };
+    return args;
+  }
+  const out = { ...args };
+  if (canonical === "Bash") {
+    const cmd = str(own2(args, "CommandLine")) ?? str(own2(args, "command"));
+    if (cmd !== void 0 && own2(out, "command") === void 0) out.command = cmd;
+    const desc = str(own2(args, "toolSummary")) ?? str(own2(args, "description"));
+    if (desc !== void 0 && own2(out, "description") === void 0) out.description = desc;
+  } else if (canonical === "Read") {
+    const fp = str(own2(args, "AbsolutePath")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    if (fp !== void 0 && own2(out, "file_path") === void 0) out.file_path = fp;
+    const start = own2(args, "StartLine");
+    if (start !== void 0 && start !== null && own2(out, "offset") === void 0) out.offset = start;
+    const end = own2(args, "EndLine");
+    if (end !== void 0 && end !== null && own2(out, "limit") === void 0) out.limit = end;
+  } else if (canonical === "Grep") {
+    const pat = str(own2(args, "Query")) ?? str(own2(args, "Pattern"));
+    if (pat !== void 0 && own2(out, "pattern") === void 0) out.pattern = pat;
+    const sp = str(own2(args, "SearchPath"));
+    if (sp !== void 0 && own2(out, "path") === void 0) out.path = sp;
+  } else if (canonical === "WebFetch") {
+    const url4 = str(own2(args, "Url")) ?? str(own2(args, "url"));
+    if (url4 !== void 0 && own2(out, "url") === void 0) out.url = url4;
+  } else if (canonical === "Write" || canonical === "Edit") {
+    const fp = str(own2(args, "TargetFile")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    if (fp !== void 0 && own2(out, "file_path") === void 0) out.file_path = fp;
+  }
+  return out;
+}
+function cwdOf(p) {
+  const direct = str(own2(p, "cwd"));
+  if (direct !== void 0) return direct;
+  const wsPaths = own2(p, "workspacePaths");
+  if (Array.isArray(wsPaths)) {
+    const first = wsPaths.find((x) => typeof x === "string" && x !== "");
+    if (first !== void 0) return first;
+  }
+  const ws = own2(p, "workspace");
+  if (isRecord3(ws)) {
+    const cur = str(own2(ws, "current_dir"));
+    if (cur !== void 0) return cur;
+  }
+  return "";
+}
+function readResult8(p) {
+  const err = own2(p, "error");
+  const isError = typeof err === "string" && err !== "";
+  const text = isError ? err : "";
+  return { isError, bytes: Buffer.byteLength(text), text };
+}
+function decode11(raw) {
+  if (!isRecord3(raw)) throw new Error("antigravity: hook payload is not a JSON object");
+  const native = own2(raw, "hookEventName") ?? own2(raw, "hook_event_name");
+  const event = typeof native === "string" && Object.hasOwn(ANTIGRAVITY_EVENTS, native) ? ANTIGRAVITY_EVENTS[native] : void 0;
+  if (event === void 0) throw new Error("antigravity: unknown hook event " + String(native));
+  const sessionId = str(own2(raw, "conversationId")) ?? str(own2(raw, "session_id")) ?? str(own2(raw, "sessionId")) ?? "";
+  const ev = { event, agent: "antigravity", sessionId, cwd: cwdOf(raw) };
+  const inv = own2(raw, "invocationNum");
+  const step = own2(raw, "stepIdx");
+  if (typeof inv === "number" && Number.isSafeInteger(inv)) ev.turn = inv;
+  else if (typeof step === "number" && Number.isSafeInteger(step)) ev.turn = step;
+  if (event === "SessionStart") ev.source = "startup";
+  if (event === "UserPromptSubmit") {
+    const prompt = own2(raw, "lastUserInput") ?? own2(raw, "prompt");
+    if (typeof prompt === "string") ev.prompt = prompt;
+  }
+  if (event === "PreToolUse" || event === "PostToolUse") {
+    const tc = own2(raw, "toolCall");
+    const call = isRecord3(tc) ? tc : void 0;
+    const name = String((call ? own2(call, "name") : own2(raw, "tool_name")) ?? "");
+    const rawArgs = call ? own2(call, "args") : own2(raw, "tool_input");
+    const args = isRecord3(rawArgs) ? rawArgs : {};
+    const canonical = canonicalName6(name, args);
+    const tool = { name, canonicalName: canonical, input: normalizeInput(name, canonical, args) };
+    const id = str(call ? own2(call, "id") : own2(raw, "tool_use_id"));
+    if (id !== void 0) tool.callId = id;
+    ev.tool = tool;
+  }
+  if (event === "PostToolUse") ev.result = readResult8(raw);
+  return ev;
+}
+function encode11(ev, d, _extra) {
+  if (ev.event === "PostToolUse" || ev.event === "Stop") return EMPTY_JSON;
+  if (ev.event === "PreToolUse") {
+    if (d.kind === "deny") {
+      const reason = d.rewritten === void 0 ? d.reason : d.rewritten + "\n" + d.reason;
+      return { stdout: JSON.stringify({ decision: "deny", reason }), exitCode: 0 };
+    }
+    return ALLOW_PRE_TOOL;
+  }
+  if (ev.event === "SessionStart") {
+    if (d.kind === "hint") {
+      return { stdout: JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: d.text } }] }), exitCode: 0 };
+    }
+    return EMPTY_JSON;
+  }
+  if (ev.event === "UserPromptSubmit") {
+    if (d.kind === "hint") {
+      return { stdout: JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: d.text } }] }), exitCode: 0 };
+    }
+    if (d.kind === "deny") {
+      const reason = d.rewritten === void 0 ? d.reason : d.rewritten + "\n" + d.reason;
+      return {
+        stdout: JSON.stringify({ injectSteps: [{ errorMessage: { userMessage: reason } }], terminationBehavior: "terminate" }),
+        exitCode: 0
+      };
+    }
+    return EMPTY_JSON;
+  }
+  return EMPTY_JSON;
+}
+
 // src/adapters/table.ts
 var CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
 var CLAUDE_TOOLS = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
@@ -13434,6 +13639,31 @@ var ADAPTERS = Object.freeze([
     encode,
     checkPermission
     // D-OMP-FIRE-1: agent omp in rows
+  },
+  {
+    // Native Google Antigravity adapter (Antigravity App, Antigravity CLI `agy`, Antigravity IDE).
+    // PostToolUse does not receive tool output, so Antigravity is a deny+redirect host; PreInvocation carries recall.
+    id: "antigravity",
+    installMode: "hooks+mcp",
+    projectSource: "spawn-cwd",
+    toolNamePrefix: TOOL_NAME_PREFIX11,
+    nativeTools: {
+      shell: [...SHELL_TOOL_NAMES6],
+      read: [...READ_TOOL_NAMES2],
+      grep: [...GREP_TOOL_NAMES],
+      webfetch: [...WEBFETCH_TOOL_NAMES2],
+      edit: [...EDIT_TOOL_NAMES]
+    },
+    execReadOnlyHint: false,
+    eventMap: EVENT_MAP,
+    compactDelivery: "sessionstart",
+    compactSummary: "none",
+    hookTimeoutMs: HOOK_TIMEOUT_MS,
+    denyChannel: "deny-reason",
+    hookChannel: { kind: "home-file", path: ".gemini/config/hooks.json" },
+    skillChannel: { kind: "home-dir", path: ".gemini/config/skills" },
+    decode: decode11,
+    encode: encode11
   }
 ]);
 var BY_ID = new Map(ADAPTERS.map((r) => [r.id, r]));
@@ -13445,7 +13675,7 @@ var DUMP_REPLACE_ROWS = /* @__PURE__ */ new Set(["claude-code", "copilot-cli", "
 function dumpRunsThenReplaces(row5) {
   return DUMP_REPLACE_ROWS.has(row5.id) && hasReplace(row5);
 }
-var RECALL_ROWS = /* @__PURE__ */ new Set(["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "zcode", "kiro"]);
+var RECALL_ROWS = /* @__PURE__ */ new Set(["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "zcode", "kiro", "antigravity"]);
 function hasRecall(row5) {
   return RECALL_ROWS.has(row5.id);
 }
@@ -14870,8 +15100,8 @@ function hostUpdateCommand(agent, env, platform = process.platform) {
   return profile === "" ? cmd : cmd.split(" && ").map((c) => profile + c).join(" && ");
 }
 function opencodeDirOf(env, home) {
-  const own4 = env[OPENCODE_CONFIG_DIR_ENV];
-  if (own4 !== void 0 && own4 !== "") return own4;
+  const own5 = env[OPENCODE_CONFIG_DIR_ENV];
+  if (own5 !== void 0 && own5 !== "") return own5;
   const xdg = env[XDG_CONFIG_HOME_ENV];
   if (xdg !== void 0 && xdg !== "") return join(xdg, AGENT_HOME_DIR.opencode[AGENT_HOME_DIR.opencode.length - 1]);
   return join(home, ...AGENT_HOME_DIR.opencode);
@@ -15559,8 +15789,13 @@ function ownDirsOf(agent, env) {
   const home = homeDirOf(env);
   if (home === null) return [];
   const shared = join5(home, ...SHARED_SKILLS_DIR);
-  const own4 = agent === "claude-code" ? [claudeDirOf(env, home)] : agent === "codex" ? [codexDirOf(env, home)] : agent === "gemini" ? [geminiDirOf(env, home)] : agent === "copilot-cli" ? [copilotDirOf(env, home)] : agent === "kiro" ? [kiroDirOf(env, home)] : agent === "opencode" ? [opencodeDirOf(env, home)] : agent === "pi" ? [piAgentDirOf(env, home)] : agent === "vscode" ? [join5(home, ...AGENT_HOME_DIR.vscode), vscodeUserDirOf(env, home)] : [join5(home, ...AGENT_HOME_DIR[agent])];
-  return [...own4, shared];
+  const own5 = agent === "claude-code" ? [claudeDirOf(env, home)] : agent === "codex" ? [codexDirOf(env, home)] : agent === "gemini" ? [geminiDirOf(env, home)] : agent === "copilot-cli" ? [copilotDirOf(env, home)] : agent === "kiro" ? [kiroDirOf(env, home)] : agent === "opencode" ? [opencodeDirOf(env, home)] : agent === "pi" ? [piAgentDirOf(env, home)] : agent === "vscode" ? [join5(home, ...AGENT_HOME_DIR.vscode), vscodeUserDirOf(env, home)] : agent === "antigravity" ? [
+    join5(home, ...AGENT_HOME_DIR.antigravity),
+    join5(home, ".gemini", "antigravity"),
+    join5(home, ".gemini", "antigravity-cli"),
+    join5(home, ".gemini", "antigravity-ide")
+  ] : [join5(home, ...AGENT_HOME_DIR[agent])];
+  return [...own5, shared];
 }
 function isOwnFile(agent, cwd, p, env = process.env) {
   if (extname(p).toLowerCase() !== AGENT_FILE_EXT) return false;
@@ -15616,7 +15851,7 @@ var EXE_SUFFIX2 = ".exe";
 var COMMAND_STARTS = ";&|(`\n\r";
 var ALLOW = Object.freeze({ kind: "allow" });
 var deny = (reason) => ({ kind: "deny", reason });
-var str = (v) => typeof v === "string" ? v : void 0;
+var str2 = (v) => typeof v === "string" ? v : void 0;
 var present = (v) => v !== void 0 && v !== null;
 var has = (list4, v) => list4.includes(v);
 function decide(ev, row5, userDeny, root = ev.cwd) {
@@ -15645,7 +15880,7 @@ function denyMessage(kind, match, row5, intent) {
 }
 function readPath(input) {
   for (const k of READ_PATH_KEYS) {
-    const p = str(input[k]);
+    const p = str2(input[k]);
     if (p !== void 0 && p !== "") return p;
   }
   return void 0;
@@ -15659,7 +15894,7 @@ function userDenyHit(canonical, input, cwd, rules) {
   if (rules.length === 0) return null;
   const readRule = (p) => matchesAnyDenyPattern(resolve5(cwd, p), rules, { tool: READ, projectDir: cwd });
   if (canonical === BASH) {
-    const cmd = str(input.command);
+    const cmd = str2(input.command);
     return cmd === void 0 ? null : matchesAnyDenyPattern(cmd, rules);
   }
   if (canonical === READ) {
@@ -15670,10 +15905,10 @@ function userDenyHit(canonical, input, cwd, rules) {
     return null;
   }
   if (canonical === CTX_EXECUTE) {
-    const file2 = str(input.file);
+    const file2 = str2(input.file);
     const byFile = file2 === void 0 || file2 === "" ? null : readRule(file2);
     if (byFile !== null) return byFile;
-    const code = str(input.code);
+    const code = str2(input.code);
     return isShellLanguage(input.language) && code !== void 0 ? shellHit(code, rules) : null;
   }
   if (canonical === CTX_BATCH && Array.isArray(input.commands)) {
@@ -15733,11 +15968,11 @@ function neverDenied(url4) {
   return NEVER_DENY_HOSTS.some((h) => host === h || host.endsWith(HOST_SEP + h));
 }
 function webFetch(input, row5) {
-  const url4 = str(input.url) ?? "";
+  const url4 = str2(input.url) ?? "";
   return neverDenied(url4) ? ALLOW : deny(denyMessage("webfetch", url4, row5));
 }
 function bash(ev, row5, input, rules, root) {
-  const cmd = str(input.command) ?? "";
+  const cmd = str2(input.command) ?? "";
   const parsed = parseShell(cmd);
   if (!parsed.ok) return couldMatch(cmd, rules) ? deny(prefixToolNames(PARSE_ERROR_DENY_LINE, row5.toolNamePrefix)) : psShellDump(ev, cmd, row5, root) ?? ALLOW;
   const cmds = unwrap(parsed.commands);
@@ -15748,7 +15983,7 @@ function bash(ev, row5, input, rules, root) {
   if (!hasReplace(row5) || isSubagentCall(ev)) {
     for (const c of cmds) {
       const kind = denyKind(c);
-      if (kind !== null) return deny(denyMessage(kind, cmd, row5, str(input.description)));
+      if (kind !== null) return deny(denyMessage(kind, cmd, row5, str2(input.description)));
     }
   }
   return shellDump(ev, cmds, row5, root) ?? psShellDump(ev, cmd, row5, root) ?? ALLOW;
@@ -16037,6 +16272,7 @@ function sourceOf(agent) {
     case "qwen":
     case "zcode":
     case "opencode":
+    case "antigravity":
       return "spawn-cwd";
     case "pi":
     case "omp":
@@ -19038,10 +19274,10 @@ function labelOfId(db, id, w) {
 function pickIn(db, source, suffix, w) {
   const named2 = storedLabel(db, source, w);
   const id = parseSourceHandle(source);
-  const own4 = newestId(db, named2, w);
-  if (own4 !== null) {
-    const otherLabel = id === null || id === own4 ? null : labelOfId(db, id, EVERY_ROW);
-    return { label: named2, id: own4, via: "label", other: otherLabel === null || otherLabel === named2 ? null : { id, label: otherLabel } };
+  const own5 = newestId(db, named2, w);
+  if (own5 !== null) {
+    const otherLabel = id === null || id === own5 ? null : labelOfId(db, id, EVERY_ROW);
+    return { label: named2, id: own5, via: "label", other: otherLabel === null || otherLabel === named2 ? null : { id, label: otherLabel } };
   }
   if (id !== null) {
     const label2 = labelOfId(db, id, w);
@@ -19191,14 +19427,14 @@ function emptySet() {
 }
 function buildCandidates(rows, sessionId) {
   if (!sessionId) return emptySet();
-  const own4 = rows.filter((r) => r.session_id === sessionId).sort((a, b) => a.seq - b.seq);
-  const prompts = own4.filter((r) => r.kind === "prompt");
+  const own5 = rows.filter((r) => r.session_id === sessionId).sort((a, b) => a.seq - b.seq);
+  const prompts = own5.filter((r) => r.kind === "prompt");
   const last2 = prompts.length > 0 ? prompts[prompts.length - 1] : void 0;
   const lastRequest = last2 === void 0 ? null : make("last_request", last2, "now: " + firstLine2(last2.body), 1, null);
   const earlierRequests = prompts.slice(0, prompts.length - 1).map((r) => make("earlier_requests", r, "asked #" + r.seq + ": " + firstLine2(r.body), 1, null));
   const failures = /* @__PURE__ */ new Map();
   const lastOk = /* @__PURE__ */ new Map();
-  for (const r of own4) {
+  for (const r of own5) {
     if (r.kind !== "cmd" && r.kind !== "toolerr" || r.key === null) continue;
     if (r.ok === 1) {
       lastOk.set(r.key, r.seq);
@@ -19213,7 +19449,7 @@ function buildCandidates(rows, sessionId) {
   }
   openErrors.sort((a, b) => a.seq - b.seq);
   const edits = /* @__PURE__ */ new Map();
-  for (const r of own4) {
+  for (const r of own5) {
     if (r.kind !== "edit" || r.path === null) continue;
     edits.set(r.path, { row: r, count: (edits.get(r.path)?.count ?? 0) + 1 });
   }
@@ -19224,7 +19460,7 @@ function buildCandidates(rows, sessionId) {
   }
   changedFiles.sort((a, b) => a.seq - b.seq);
   const decided = /* @__PURE__ */ new Map();
-  for (const r of own4) {
+  for (const r of own5) {
     if (r.kind !== "decision" || r.body === "") continue;
     const key = r.key ?? r.body;
     decided.set(key, { row: r, count: (decided.get(key)?.count ?? 0) + 1 });
@@ -19232,7 +19468,7 @@ function buildCandidates(rows, sessionId) {
   const decisions = [];
   for (const [key, d] of decided) decisions.push(make("decisions", d.row, "decided #" + d.row.seq + ": " + firstLine2(d.row.body), d.count, key));
   decisions.sort((a, b) => a.seq - b.seq);
-  const indexedSources = own4.filter((r) => r.kind === "index").map((r) => make("indexed_sources", r, "indexed " + (r.key ?? ""), 1, r.key));
+  const indexedSources = own5.filter((r) => r.kind === "index").map((r) => make("indexed_sources", r, "indexed " + (r.key ?? ""), 1, r.key));
   const set3 = {
     lastRequest,
     openErrors: capSection(openErrors),
@@ -19943,9 +20179,9 @@ function renderRow(i, row5, skewed, named2, budget) {
 function fitRow(row5, skewed, named2, budget) {
   const whole2 = JSON.stringify(row5);
   if (bytes(whole2) <= budget) return whole2;
-  const own4 = Object.keys(row5);
+  const own5 = Object.keys(row5);
   const tier = (k) => skewed.includes(k) ? 0 : named2.has(k) ? 1 : typeof row5[k] !== "object" || row5[k] === null ? 2 : 3;
-  const order = [...own4].sort((a, b) => tier(a) - tier(b) || own4.indexOf(a) - own4.indexOf(b));
+  const order = [...own5].sort((a, b) => tier(a) - tier(b) || own5.indexOf(a) - own5.indexOf(b));
   const field2 = (k) => JSON.stringify(k) + ":" + JSON.stringify(row5[k]);
   const chosen = /* @__PURE__ */ new Set();
   let used = 2;
@@ -19956,7 +20192,7 @@ function fitRow(row5, skewed, named2, budget) {
     used += cost;
   }
   if (!skewed.every((k) => chosen.has(k))) return null;
-  return "{" + own4.filter((k) => chosen.has(k)).map(field2).join(",") + "}";
+  return "{" + own5.filter((k) => chosen.has(k)).map(field2).join(",") + "}";
 }
 function namedKeys(keys, query) {
   const score = rankTexts(keys, query, "any");
@@ -20348,6 +20584,8 @@ function firstString(o, keys) {
   return "";
 }
 function inputOf(o) {
+  const tc = o.toolCall;
+  if (isRec(tc) && isRec(tc.args)) return tc.args;
   for (const k of HOOK_FAIL_INPUT_KEYS) {
     let v = o[k];
     if (typeof v === "string") {
@@ -20360,6 +20598,11 @@ function inputOf(o) {
     if (isRec(v)) return v;
   }
   return {};
+}
+function toolNameOf(o) {
+  const tc = o.toolCall;
+  if (isRec(tc) && typeof tc.name === "string") return tc.name;
+  return firstString(o, HOOK_FAIL_TOOL_KEYS);
 }
 function homeOf(env) {
   return env.HOME ?? env.USERPROFILE ?? "";
@@ -20459,7 +20702,7 @@ function bigFile(abs) {
   }
 }
 function bigRead(agent, input, cwd) {
-  if ((input.offset ?? null) !== null || (input.limit ?? null) !== null) return false;
+  if ((input.offset ?? null) !== null || (input.limit ?? null) !== null || (input.StartLine ?? null) !== null || (input.EndLine ?? null) !== null) return false;
   const many = Array.isArray(input[READ_PATH_LIST_KEY]) ? input[READ_PATH_LIST_KEY].filter((x) => typeof x === "string") : [];
   return [firstString(input, READ_PATH_KEYS), ...many].some((p) => p !== "" && bigFile(resolve7(cwd, p)) && !isMediaRead(agent, resolve7(cwd, p)) && !isOwnFile(agent, cwd, p));
 }
@@ -20475,7 +20718,7 @@ function failureOutput(agent, raw, err, cwdFallback = "") {
   try {
     if (!isRec(raw)) return allowOutput(agent);
     if (!isPreTool(row5, firstString(raw, HOOK_FAIL_EVENT_KEYS))) return allowOutput(agent);
-    const name = firstString(raw, HOOK_FAIL_TOOL_KEYS);
+    const name = toolNameOf(raw);
     if (name === "" || name.includes(OWN_TOOL_PREFIX)) return allowOutput(agent);
     const kind = kindOf(row5, name);
     if (kind === null) return allowOutput(agent);
@@ -20503,7 +20746,7 @@ function isAgentId(s) {
 function message2(err) {
   return err instanceof Error ? err.message : String(err);
 }
-function str2(v) {
+function str3(v) {
   return typeof v === "string" ? v : "";
 }
 async function handleHook(agent, raw, env) {
@@ -20787,7 +21030,7 @@ function caseB(ev, row5, d0, userDeny) {
   const command = tool.input.command;
   if (typeof command !== "string") return d0;
   const wrapper = '"' + join9(dirname4(process.argv[1] ?? ""), RUN_WRAPPER_FILE) + '"';
-  const rewritten = [RUN_WRAPPER_NODE, wrapper, b64(command), b64(JSON.stringify(userDeny ?? [])), b64(str2(tool.input.description))].join(" ");
+  const rewritten = [RUN_WRAPPER_NODE, wrapper, b64(command), b64(JSON.stringify(userDeny ?? [])), b64(str3(tool.input.description))].join(" ");
   return { kind: "deny", reason: SUBAGENT_RUN_DENY, rewritten };
 }
 function journalKind(tool, row5, isError) {
@@ -20834,7 +21077,7 @@ async function postToolUse(ev, row5, project, env, settle3) {
   const kind = journalKind(tool, row5, result.isError);
   const journal = (returned) => {
     if (kind === null) return;
-    const key = kind === "cmd" ? canonicalKey(tool.canonicalName, str2(tool.input.command)) : kind === "toolerr" ? tool.canonicalName + ":" + stableJson(tool.input) : null;
+    const key = kind === "cmd" ? canonicalKey(tool.canonicalName, str3(tool.input.command)) : kind === "toolerr" ? tool.canonicalName + ":" + stableJson(tool.input) : null;
     appendDetached(project, ev.sessionId, {
       // step 4; body is the whole text (D-M3-H2-6)
       session_id: ev.sessionId,
@@ -20895,7 +21138,7 @@ async function postReplace(ev, row5, project, env, tool, result, text, persisted
   } else {
     label2 = mainLabel(tool, ev);
   }
-  const intent = [tool.input.description, tool.input.command, tool.input.file_path, tool.input.pattern, tool.input.url, tool.name].map(str2).find((v) => v.trim() !== "") ?? tool.canonicalName;
+  const intent = [tool.input.description, tool.input.command, tool.input.file_path, tool.input.pattern, tool.input.url, tool.name].map(str3).find((v) => v.trim() !== "") ?? tool.canonicalName;
   const chunks = chunkText(text, "text", REPLACE_CHUNK_BYTES);
   const db = await hookDb(project);
   const op = { t: "src", id: null, src: sourceRowOf(project, ev.sessionId, label2), text, max: REPLACE_CHUNK_BYTES, units: true };
@@ -21011,7 +21254,7 @@ async function lastPrompt(project, sessionId) {
   }
 }
 function mainLabel(tool, ev) {
-  const cmd = str2(tool.input.command) ?? str2(tool.input.file_path) ?? "";
+  const cmd = str3(tool.input.command) ?? str3(tool.input.file_path) ?? "";
   const nl = cmd.indexOf("\n");
   const head2 = (tool.canonicalName + ":" + (nl < 0 ? cmd : cmd.slice(0, nl))).slice(0, SOURCE_LABEL_MAX_CHARS);
   return head2 + "#" + (tool.callId ?? String(ev.turn ?? 0));
@@ -21893,7 +22136,7 @@ function indexCombined(db, ctx, label2, ran, deadline, budgetBytes) {
 function bytes3(s) {
   return Buffer.byteLength(s, "utf8");
 }
-function answer2(db, ctx, ownIds, queries, share, own4) {
+function answer2(db, ctx, ownIds, queries, share, own5) {
   const seen = /* @__PURE__ */ new Set();
   const lines = [];
   for (const [qi, q] of queries.entries()) {
@@ -21906,7 +22149,7 @@ function answer2(db, ctx, ownIds, queries, share, own4) {
     for (const h of hits) {
       const key = chunkKey(h.sourceId, h.ord);
       if (seen.has(key)) continue;
-      const text = own4.get(key) ?? h.snippet;
+      const text = own5.get(key) ?? h.snippet;
       if (text === "") {
         seen.add(key);
         continue;
@@ -22000,13 +22243,13 @@ import { existsSync as existsSync4 } from "node:fs";
 import { dirname as dirname5, join as join11 } from "node:path";
 import { fileURLToPath } from "node:url";
 function bundleDirOf(argv1, moduleFile) {
-  const own4 = dirname5(argv1);
-  if (existsSync4(join11(own4, SERVER_ENTRY_FILE))) return own4;
+  const own5 = dirname5(argv1);
+  if (existsSync4(join11(own5, SERVER_ENTRY_FILE))) return own5;
   let dir = dirname5(moduleFile);
   for (; ; ) {
     if (existsSync4(join11(dir, SERVER_ENTRY_FILE))) return dir;
     const up = dirname5(dir);
-    if (up === dir) return own4;
+    if (up === dir) return own5;
     dir = up;
   }
 }
@@ -24363,8 +24606,8 @@ function lineIndent(text, at2) {
 }
 function indentUnit(root, clean) {
   if (root === null || root.kind !== "object" || root.members.length === 0) return JSON_INDENT_UNIT;
-  const own4 = lineIndent(clean, root.members[0].keyStart);
-  return own4 === "" ? JSON_INDENT_UNIT : own4;
+  const own5 = lineIndent(clean, root.members[0].keyStart);
+  return own5 === "" ? JSON_INDENT_UNIT : own5;
 }
 function render(value, unit, base) {
   return JSON.stringify(value, null, unit).split("\n").join("\n" + base);
@@ -24825,6 +25068,28 @@ function scanZcode(agentHome, out) {
     if (c.command.includes(V1_HOOK_COMMAND)) out.push(finding(hooksFile, c.path, V1_REASON.zcodeHook));
   }
 }
+function scanAntigravity(home, agentHome, out) {
+  const hooksFile = join13(agentHome, HOOKS_JSON_FILE);
+  const doc = readJson(hooksFile);
+  if (isObj(doc)) {
+    for (const [name, group] of Object.entries(doc)) {
+      if (!isObj(group)) continue;
+      for (const [event, entries] of Object.entries(group)) {
+        listOf(entries).forEach((entry, i) => {
+          const direct = commandOf(entry);
+          if (direct !== null && isV1Hook(direct)) out.push(finding(hooksFile, keyPath(name, event, i), V1_REASON.hook));
+          if (isObj(entry)) {
+            listOf(entry[HOOKS_KEY]).forEach((inner, j) => {
+              const cmd = commandOf(inner);
+              if (cmd !== null && isV1Hook(cmd)) out.push(finding(hooksFile, keyPath(name, event, i, HOOKS_KEY, j), V1_REASON.hook));
+            });
+          }
+        });
+      }
+    }
+  }
+  dataDir(join13(home, ".gemini", V1_DATA_DIR_NAME), V1_REASON.dataDirShared, out);
+}
 function firstTmpMatch(dir) {
   let handle;
   try {
@@ -24886,6 +25151,9 @@ function detectV1(agent, home, scope = {}) {
     case "zcode":
       scanZcode(agentHome, out);
       break;
+    case "antigravity":
+      scanAntigravity(home, agentHome, out);
+      break;
   }
   scanAll(home, scope.tmp ?? tmpdir(), out);
   return out;
@@ -24905,11 +25173,11 @@ var parseOrNull = (text) => {
     return null;
   }
 };
-var isRecord3 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+var isRecord4 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 function recordedInstalls(text) {
   const parsed = parseOrNull(text);
-  const plugins = isRecord3(parsed) ? parsed.plugins : void 0;
-  if (!isRecord3(plugins)) return [];
+  const plugins = isRecord4(parsed) ? parsed.plugins : void 0;
+  if (!isRecord4(plugins)) return [];
   const out = [];
   for (const key of Object.keys(plugins)) {
     const at2 = key.indexOf(PLUGIN_KEY_SEPARATOR);
@@ -24917,7 +25185,7 @@ function recordedInstalls(text) {
     const entries = plugins[key];
     if (!Array.isArray(entries)) continue;
     for (const e of entries) {
-      if (!isRecord3(e) || typeof e.installPath !== "string" || e.installPath === "") continue;
+      if (!isRecord4(e) || typeof e.installPath !== "string" || e.installPath === "") continue;
       const scope = typeof e.scope === "string" ? e.scope : DEFAULT_PLUGIN_SCOPE;
       const projectPath = typeof e.projectPath === "string" ? e.projectPath : void 0;
       out.push({ key, scope, projectPath, installPath: e.installPath });
@@ -24947,8 +25215,8 @@ function enabledPlugins(claudeDir, project) {
   for (const file2 of files) {
     const text = readOrNull(file2);
     const doc = text === null ? null : parseOrNull(text);
-    const on = isRecord3(doc) ? doc[ENABLED_PLUGINS_KEY] : void 0;
-    if (isRecord3(on)) Object.assign(out, on);
+    const on = isRecord4(doc) ? doc[ENABLED_PLUGINS_KEY] : void 0;
+    if (isRecord4(on)) Object.assign(out, on);
   }
   return out;
 }
@@ -25450,6 +25718,22 @@ function ownHooks(block, shape, timeoutKey, native, agent) {
     }
     return out;
   }
+  if (shape === "antigravity") {
+    if (!isObject4(block) || block.enabled === false) return out;
+    for (const e of list2(block[native])) {
+      if (!isObject4(e)) continue;
+      if (Array.isArray(e[HOOK_GROUP_HOOKS_FIELD])) {
+        for (const h of list2(e[HOOK_GROUP_HOOKS_FIELD])) {
+          if (isObject4(h) && isOwnCommand(h[HOOK_COMMAND_FIELD], agent)) {
+            out.push({ command: h[HOOK_COMMAND_FIELD], matcher: e[HOOK_MATCHER_FIELD], timeout: h[timeoutKey] });
+          }
+        }
+      } else if (isOwnCommand(e[HOOK_COMMAND_FIELD], agent)) {
+        out.push({ command: e[HOOK_COMMAND_FIELD], matcher: void 0, timeout: e[timeoutKey] });
+      }
+    }
+    return out;
+  }
   const entries = isObject4(block) ? list2(block[native]) : [];
   for (const e of entries) {
     if (!isObject4(e)) continue;
@@ -25503,9 +25787,19 @@ function codexNativeDir(env, home) {
   }
   return found.length === 0 ? null : found[found.length - 1];
 }
-function nativeMcpWrong(dir, row5) {
+function antigravityNativeDir(home) {
+  const cfgDir = join17(home, ...AGENT_HOME_DIR.antigravity);
+  const dir = join17(cfgDir, HOST_PLUGINS_DIR_NAME, SERVER_KEY);
+  if (!existsSync11(join17(dir, ANTIGRAVITY_MCP_FILE)) || !existsSync11(join17(dir, HOOKS_JSON_FILE))) return null;
+  const cfg = readJson2(join17(cfgDir, CONFIG_JSON_FILE));
+  const plugins = isObject4(cfg) && isObject4(cfg.plugins) ? cfg.plugins : void 0;
+  const entry = plugins && isObject4(plugins[SERVER_KEY]) ? plugins[SERVER_KEY] : void 0;
+  if (entry && entry.enabled === false) return null;
+  return dir;
+}
+function nativeMcpWrong(dir, row5, mcpFileName = CODEX_PLUGIN_MCP_FILE) {
   try {
-    const entry = hostConfigValueAt(readParsed(row5.id, join17(dir, CODEX_PLUGIN_MCP_FILE)).value, [MCP_SERVERS_FIELD, SERVER_KEY]);
+    const entry = hostConfigValueAt(readParsed(row5.id, join17(dir, mcpFileName)).value, [MCP_SERVERS_FIELD, SERVER_KEY]);
     if (!isObject4(entry)) return true;
     const args = list2(entry[MCP_ARGS_FIELD]);
     const script = args[0];
@@ -25522,10 +25816,10 @@ function isNativeOpencodeEntry(entry, key) {
   if (typeof spec !== "string") return false;
   return spec.startsWith(OPENCODE_NPM_SPEC_PREFIX) || key === OPENCODE_PLUGINS_KEY && spec === SERVER_KEY;
 }
-function isOwnOpencodeEntry(entry, key, own4) {
+function isOwnOpencodeEntry(entry, key, own5) {
   const spec = opencodeEntrySpec(entry);
   if (typeof spec !== "string") return false;
-  return spec === OPENCODE_GIT_SPEC || own4.includes(spec) || isNativeOpencodeEntry(entry, key);
+  return spec === OPENCODE_GIT_SPEC || own5.includes(spec) || isNativeOpencodeEntry(entry, key);
 }
 function stringLiterals(src) {
   const out = [];
@@ -25643,8 +25937,8 @@ function opencodeFileValue(file2) {
 }
 function opencodeValueListed(value) {
   const bundle = opencodePluginFile();
-  const own4 = [bundle, join17(bundle, ...OPENCODE_PLUGIN_PATH)];
-  if ([OPENCODE_PLUGIN_KEY, OPENCODE_PLUGINS_KEY].some((key) => list2(isObject4(value) ? value[key] : void 0).some((e) => isOwnOpencodeEntry(e, key, own4)))) return true;
+  const own5 = [bundle, join17(bundle, ...OPENCODE_PLUGIN_PATH)];
+  if ([OPENCODE_PLUGIN_KEY, OPENCODE_PLUGINS_KEY].some((key) => list2(isObject4(value) ? value[key] : void 0).some((e) => isOwnOpencodeEntry(e, key, own5)))) return true;
   const mcp = isObject4(value) && isObject4(value.mcp) ? value.mcp : {};
   return opencodeMcpOwn(mcp[SERVER_KEY]) || isObject4(mcp.servers) && opencodeMcpOwn(mcp.servers[SERVER_KEY]);
 }
@@ -25656,6 +25950,8 @@ function opencodeListed(file2, worktree) {
 function mcpWrong(row5, home, env, worktree) {
   const native = row5.id === "codex" ? codexNativeDir(env, home) : null;
   if (native !== null) return nativeMcpWrong(native, row5);
+  const agyNative = row5.id === "antigravity" ? antigravityNativeDir(home) : null;
+  if (agyNative !== null) return nativeMcpWrong(agyNative, row5, ANTIGRAVITY_MCP_FILE);
   const file2 = mcpFile(row5, home, env);
   try {
     if (file2 === null) {
@@ -25672,7 +25968,8 @@ function mcpWrong(row5, home, env, worktree) {
 function hookFile(row5, spec, home, env, worktree) {
   const root = spec.root === "plugin" ? resolvePluginRoot(row5, env, worktree) : spec.root === "home" ? home : worktree;
   const native = row5.id === "codex" ? codexNativeDir(env, home) : null;
-  const file2 = native !== null ? join17(native, CODEX_PLUGIN_HOOKS_FILE) : row5.id === "codex" ? join17(codexDirOf(env, home), HOOKS_JSON_FILE) : row5.id === "copilot-cli" ? join17(copilotDirOf(env, home), ...spec.file.slice(1)) : row5.id === "kiro" ? join17(kiroDirOf(env, home), ...spec.file.slice(1)) : join17(root, ...spec.file);
+  const agyNative = row5.id === "antigravity" ? antigravityNativeDir(home) : null;
+  const file2 = native !== null ? join17(native, CODEX_PLUGIN_HOOKS_FILE) : agyNative !== null ? join17(agyNative, HOOKS_JSON_FILE) : row5.id === "codex" ? join17(codexDirOf(env, home), HOOKS_JSON_FILE) : row5.id === "copilot-cli" ? join17(copilotDirOf(env, home), ...spec.file.slice(1)) : row5.id === "kiro" ? join17(kiroDirOf(env, home), ...spec.file.slice(1)) : join17(root, ...spec.file);
   return file2;
 }
 function hookParts(row5, home, env, worktree) {
@@ -25693,20 +25990,24 @@ function hookParts(row5, home, env, worktree) {
   let timeoutBad = false;
   for (const [canonical, native] of Object.entries(row5.eventMap)) {
     if (native === void 0) continue;
-    const own4 = ownHooks(block, spec.shape, spec.timeoutKey, native, row5.id);
+    const own5 = ownHooks(block, spec.shape, spec.timeoutKey, native, row5.id);
     if (spec.shape === "kiro" && TOOL_HOOK_EVENTS.includes(canonical)) {
-      const got = own4.map((h) => h.matcher).sort();
+      const got = own5.map((h) => h.matcher).sort();
       const want = KIRO_TOOL_MATCHERS.map(([m]) => m).sort();
       if (JSON.stringify(got) !== JSON.stringify(want)) hooksBad = true;
-      for (const h of own4) if (!validTimeout(h.timeout)) timeoutBad = true;
+      for (const h of own5) if (!validTimeout(h.timeout)) timeoutBad = true;
       continue;
     }
-    if (own4.length !== 1) {
+    if (own5.length !== 1) {
       hooksBad = true;
       continue;
     }
-    if (spec.matcher && TOOL_HOOK_EVENTS.includes(canonical) && own4[0].matcher !== composeMatcher(row5, canonical)) hooksBad = true;
-    if (!validTimeout(own4[0].timeout)) timeoutBad = true;
+    if (spec.matcher && TOOL_HOOK_EVENTS.includes(canonical)) {
+      const wantGlobal = composeMatcher(row5, canonical);
+      const wantPlugin = row5.id === "antigravity" ? composeMatcher({ ...row5, toolNamePrefix: PLUGIN_TOOL_NAME_PREFIX2 }, canonical) : wantGlobal;
+      if (own5[0].matcher !== wantGlobal && own5[0].matcher !== wantPlugin) hooksBad = true;
+    }
+    if (!validTimeout(own5[0].timeout)) timeoutBad = true;
   }
   return [...hooksBad ? [PART_HOOKS] : [], ...timeoutBad ? [PART_TIMEOUT] : []];
 }
@@ -25799,6 +26100,8 @@ function configPaths(row5, env, worktree) {
   if (mcp !== null) out.push({ label: "MCP entry", path: mcp });
   const native = row5.id === "codex" ? codexNativeDir(env, home) : null;
   if (native !== null) out.push({ label: "Codex plugin MCP", path: join17(native, CODEX_PLUGIN_MCP_FILE) });
+  const agyNative = row5.id === "antigravity" ? antigravityNativeDir(home) : null;
+  if (agyNative !== null) out.push({ label: "Antigravity plugin MCP", path: join17(agyNative, ANTIGRAVITY_MCP_FILE) });
   const spec = HOOK_HOST_FILE[row5.id];
   if (spec !== null) {
     try {
@@ -27644,6 +27947,181 @@ var opencode_default = {
   }
 };
 
+// tests/fixtures/host-schemas/antigravity.json
+var antigravity_default = {
+  host: "antigravity",
+  source: "Google Antigravity (agy 1.5.14 / Antigravity App 2.0 / Antigravity IDE): https://antigravity.google/docs/hooks.md (SessionStart, PreToolUse, PostToolUse, PreInvocation, Stop output contracts).",
+  output: {
+    PreToolUse: {
+      title: "Antigravity PreToolUse reply",
+      type: "object",
+      additionalProperties: false,
+      required: [
+        "decision"
+      ],
+      properties: {
+        decision: {
+          type: "string",
+          enum: [
+            "allow",
+            "auto_approve",
+            "deny",
+            "ask",
+            "force_ask",
+            "deny_unless_prior_grant"
+          ]
+        },
+        reason: {
+          type: "string"
+        },
+        overwrite: {
+          type: "object"
+        },
+        permissionOverrides: {
+          type: "array",
+          items: {
+            type: "string"
+          }
+        }
+      }
+    },
+    PostToolUse: {
+      title: "Antigravity PostToolUse reply",
+      type: "object",
+      additionalProperties: false,
+      properties: {}
+    },
+    SessionStart: {
+      title: "Antigravity SessionStart reply",
+      definitions: {
+        InjectStep: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            systemMessage: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "systemMessage"
+              ],
+              properties: {
+                systemMessage: {
+                  type: "string"
+                },
+                metadata: {
+                  type: "object"
+                }
+              }
+            },
+            userMessage: {
+              type: "string"
+            },
+            ephemeralMessage: {
+              type: "string"
+            },
+            errorMessage: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "userMessage"
+              ],
+              properties: {
+                userMessage: {
+                  type: "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        injectSteps: {
+          type: "array",
+          items: {
+            $ref: "#/definitions/InjectStep"
+          }
+        }
+      }
+    },
+    UserPromptSubmit: {
+      title: "Antigravity PreInvocation reply",
+      definitions: {
+        InjectStep: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            systemMessage: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "systemMessage"
+              ],
+              properties: {
+                systemMessage: {
+                  type: "string"
+                },
+                metadata: {
+                  type: "object"
+                }
+              }
+            },
+            userMessage: {
+              type: "string"
+            },
+            ephemeralMessage: {
+              type: "string"
+            },
+            errorMessage: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "userMessage"
+              ],
+              properties: {
+                userMessage: {
+                  type: "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        injectSteps: {
+          type: "array",
+          items: {
+            $ref: "#/definitions/InjectStep"
+          }
+        },
+        terminationBehavior: {
+          type: "string",
+          enum: [
+            "",
+            "terminate"
+          ]
+        }
+      }
+    },
+    Stop: {
+      title: "Antigravity Stop reply",
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        decision: {
+          type: "string"
+        },
+        reason: {
+          type: "string"
+        }
+      }
+    }
+  }
+};
+
 // src/core/ops/hook-shape.ts
 var HOST_SHAPES = {
   "claude-code": claude_code_default,
@@ -27656,8 +28134,9 @@ var HOST_SHAPES = {
   zcode: zcode_default,
   pi: pi_default,
   opencode: opencode_default,
-  omp: pi_default
+  omp: pi_default,
   // ADR-0026: OMP reads the Pi extension reply
+  antigravity: antigravity_default
 };
 var NOTE_KEYS = /* @__PURE__ */ new Set(["$schema", "title", "description", "definitions", "default"]);
 var RULE_KEYS = /* @__PURE__ */ new Set(["type", "enum", "const", "required", "properties", "additionalProperties", "items", "allOf", "$ref"]);
@@ -27988,7 +28467,8 @@ var CWD_KEY = {
   zcode: "cwd",
   pi: "cwd",
   opencode: "directory",
-  omp: "cwd"
+  omp: "cwd",
+  antigravity: "cwd"
 };
 function payloadFor(agent, payload, worktree) {
   return worktree !== void 0 && isObject6(payload) ? { ...payload, [CWD_KEY[agent]]: worktree } : payload;
@@ -32501,7 +32981,7 @@ function replaceQuotes(value) {
 function formatAttributes(attributes, options, xmlMode) {
   if (!attributes)
     return "";
-  const encode13 = (options.encodeEntities ?? options.decodeEntities) === false ? replaceQuotes : xmlMode || options.encodeEntities !== "utf8" ? encodeXML : escapeAttribute;
+  const encode14 = (options.encodeEntities ?? options.decodeEntities) === false ? replaceQuotes : xmlMode || options.encodeEntities !== "utf8" ? encodeXML : escapeAttribute;
   const isForeign = xmlMode === "foreign";
   const showEmpty = !!(options.emptyAttrs ?? xmlMode);
   let result = "";
@@ -32510,7 +32990,7 @@ function formatAttributes(attributes, options, xmlMode) {
       continue;
     const value = attributes[key];
     const k = isForeign ? attributeNames.get(key) ?? key : key;
-    result += !showEmpty && (value == null || value === "") ? ` ${k}` : ` ${k}="${encode13(value == null ? "" : String(value))}"`;
+    result += !showEmpty && (value == null || value === "") ? ` ${k}` : ` ${k}="${encode14(value == null ? "" : String(value))}"`;
   }
   return result;
 }
@@ -33910,8 +34390,8 @@ function defaultWrite(file2, text) {
   writeFileSync7(file2, text, "utf8");
 }
 function hostConfigPath(agent, home, env) {
-  const own4 = OWN_MCP_ENTRY[agent];
-  if (own4 !== void 0) return ownMcpFileOf(agent, own4.file, env, home);
+  const own5 = OWN_MCP_ENTRY[agent];
+  if (own5 !== void 0) return ownMcpFileOf(agent, own5.file, env, home);
   switch (agent) {
     case "opencode":
       return join26(opencodeDirOf(env, home), OPENCODE_BASE_CONFIG_FILE);
@@ -34036,11 +34516,11 @@ function ownEntries2(agent, env) {
   if (mcp !== void 0) {
     const top = mcp.key[0];
     const inner = mcp.key.slice(1, -1);
-    const own4 = mcp.key[mcp.key.length - 1];
+    const own5 = mcp.key[mcp.key.length - 1];
     const holder = (v) => inner.reduce((cur, k) => isObj3(cur) ? cur[k] : void 0, v);
     const without = (v, path8) => {
       const o = v;
-      if (path8.length === 0) return Object.fromEntries(Object.entries(o).filter(([k]) => k !== own4));
+      if (path8.length === 0) return Object.fromEntries(Object.entries(o).filter(([k]) => k !== own5));
       return { ...o, [path8[0]]: without(o[path8[0]], path8.slice(1)) };
     };
     return [{
@@ -34049,7 +34529,7 @@ function ownEntries2(agent, env) {
       shown: mcp.key.join(V1_KEY_PATH_SEP),
       has: (v) => {
         const h = holder(v);
-        return isObj3(h) && Object.hasOwn(h, own4);
+        return isObj3(h) && Object.hasOwn(h, own5);
       },
       drop: (v) => without(v, inner)
     }];
@@ -34266,15 +34746,15 @@ function bundleDir() {
   return ownBundleDir();
 }
 function pluginRootRow(adapter, env) {
-  const own4 = bundleDir();
+  const own5 = bundleDir();
   let root;
   try {
     root = resolvePluginRoot(adapter, env);
   } catch (err) {
-    if (err instanceof CtxError && err.code === "PLUGIN_ROOT_MISSING") return [row4(UPGRADE_PLUGIN_ROOT_AREA, UPGRADE_NOT_FOUND, own4)];
+    if (err instanceof CtxError && err.code === "PLUGIN_ROOT_MISSING") return [row4(UPGRADE_PLUGIN_ROOT_AREA, UPGRADE_NOT_FOUND, own5)];
     throw err;
   }
-  return root === own4 ? [] : [row4(UPGRADE_PLUGIN_ROOT_AREA, root, own4)];
+  return root === own5 ? [] : [row4(UPGRADE_PLUGIN_ROOT_AREA, root, own5)];
 }
 function hostRow(adapter, env) {
   return row4(UPGRADE_HOST_AREA, "", hostUpdateCommand(adapter.id, env));
@@ -34496,7 +34976,7 @@ __export(util_exports2, {
   objectClone: () => objectClone,
   omit: () => omit2,
   optionalKeys: () => optionalKeys2,
-  own: () => own2,
+  own: () => own3,
   parsedType: () => parsedType4,
   partial: () => partial2,
   pick: () => pick2,
@@ -34693,14 +35173,14 @@ function promiseAllObject2(promisesObj) {
 }
 function randomString2(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str4 = "";
+  let str5 = "";
   for (let i = 0; i < length; i++) {
-    str4 += chars[Math.floor(Math.random() * chars.length)];
+    str5 += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str4;
+  return str5;
 }
-function esc2(str4) {
-  return JSON.stringify(str4);
+function esc2(str5) {
+  return JSON.stringify(str5);
 }
 function slugify(input) {
   return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -34814,8 +35294,8 @@ var primitiveTypes2 = /* @__PURE__ */ new Set([
   "symbol",
   "undefined"
 ]);
-function escapeRegex2(str4) {
-  return str4.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex2(str5) {
+  return str5.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone2(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -35081,13 +35561,13 @@ function getSizableOrigin2(input) {
   return "unknown";
 }
 var highSurrogate = /[\uD800-\uDBFF]/;
-function codePointLength(str4) {
-  const units = str4.length;
-  if (!highSurrogate.test(str4))
+function codePointLength(str5) {
+  const units = str5.length;
+  if (!highSurrogate.test(str5))
     return units;
   let count2 = units;
   for (let i = 0; i < units - 1; i++) {
-    if ((str4.charCodeAt(i) & 64512) === 55296 && (str4.charCodeAt(i + 1) & 64512) === 56320) {
+    if ((str5.charCodeAt(i) & 64512) === 55296 && (str5.charCodeAt(i + 1) & 64512) === 56320) {
       count2--;
       i++;
     }
@@ -35189,12 +35669,12 @@ function members(proto, table3) {
       defineBound(proto, key, desc.value);
   }
 }
-function own2(inst, key, value, enumerable = true) {
+function own3(inst, key, value, enumerable = true) {
   Object.defineProperty(inst, key, { configurable: true, writable: true, enumerable, value });
   return value;
 }
 function hide(inst, key, value) {
-  return own2(inst, key, value, false);
+  return own3(inst, key, value, false);
 }
 // @__NO_SIDE_EFFECTS__
 function derived(computes, table3) {
@@ -35204,10 +35684,10 @@ function derived(computes, table3) {
       configurable: true,
       enumerable: true,
       get() {
-        return own2(this, key, compute(this));
+        return own3(this, key, compute(this));
       },
       set(value) {
-        own2(this, key, value);
+        own3(this, key, value);
       }
     });
   }
@@ -35217,10 +35697,10 @@ function defineBound(proto, key, fn) {
   Object.defineProperty(proto, key, {
     configurable: true,
     get() {
-      return this == null ? fn : own2(this, key, fn.bind(this));
+      return this == null ? fn : own3(this, key, fn.bind(this));
     },
     set(value) {
-      own2(this, key, value);
+      own3(this, key, value);
     }
   });
 }
@@ -35346,12 +35826,12 @@ function $constructor2(name, initializer7, proto, params) {
     inst._zod.traits.add(name);
     initializer7(inst, def);
     if (initialized) {
-      const own4 = Object.getPrototypeOf(inst);
+      const own5 = Object.getPrototypeOf(inst);
       const ctorProto = inst._zod.constr.prototype;
-      let up = own4;
+      let up = own5;
       while (up && up !== ctorProto)
         up = Object.getPrototypeOf(up);
-      const target = up ?? own4;
+      const target = up ?? own5;
       if (!initialized.has(target)) {
         initialized.add(target);
         members(target, protoMembers);
@@ -36213,7 +36693,7 @@ var $ZodType2 = /* @__PURE__ */ $constructor2("$ZodType", (inst, def) => {
     return hide(this, "~standard", standardProps(this));
   },
   set "~standard"(value) {
-    own2(this, "~standard", value);
+    own3(this, "~standard", value);
   }
 });
 var toStandardResult = (r, ctx) => r.issues.length ? { issues: r.issues.map((iss) => finalizeIssue2(iss, ctx, config2())) } : { value: r.value };
@@ -39970,8 +40450,8 @@ var parse4 = /* @__PURE__ */ _parse2(ZodRealError2);
 var parseAsync3 = /* @__PURE__ */ _parseAsync2(ZodRealError2);
 var safeParse3 = /* @__PURE__ */ _safeParse2(ZodRealError2);
 var safeParseAsync3 = /* @__PURE__ */ _safeParseAsync2(ZodRealError2);
-var encode11 = /* @__PURE__ */ _encode(ZodRealError2);
-var decode11 = /* @__PURE__ */ _decode(ZodRealError2);
+var encode12 = /* @__PURE__ */ _encode(ZodRealError2);
+var decode12 = /* @__PURE__ */ _decode(ZodRealError2);
 var encodeAsync = /* @__PURE__ */ _encodeAsync(ZodRealError2);
 var decodeAsync = /* @__PURE__ */ _decodeAsync(ZodRealError2);
 var safeEncode = /* @__PURE__ */ _safeEncode(ZodRealError2);
@@ -40128,10 +40608,10 @@ var ZodType2 = /* @__PURE__ */ $constructor2("ZodType", (inst, def) => {
     return validateAsync(this, data, params);
   },
   encode: function _encode2(data, params) {
-    return encode11(this, data, params, { callee: _encode2 });
+    return encode12(this, data, params, { callee: _encode2 });
   },
   decode: function _decode2(data, params) {
-    return decode11(this, data, params, { callee: _decode2 });
+    return decode12(this, data, params, { callee: _decode2 });
   },
   encodeAsync: async function _encodeAsync2(data, params) {
     return await encodeAsync(this, data, params, { callee: _encodeAsync2 });
@@ -42077,7 +42557,7 @@ __export(util_exports3, {
   objectClone: () => objectClone2,
   omit: () => omit3,
   optionalKeys: () => optionalKeys3,
-  own: () => own3,
+  own: () => own4,
   parsedType: () => parsedType5,
   partial: () => partial3,
   pick: () => pick3,
@@ -42274,14 +42754,14 @@ function promiseAllObject3(promisesObj) {
 }
 function randomString3(length = 10) {
   const chars = "abcdefghijklmnopqrstuvwxyz";
-  let str4 = "";
+  let str5 = "";
   for (let i = 0; i < length; i++) {
-    str4 += chars[Math.floor(Math.random() * chars.length)];
+    str5 += chars[Math.floor(Math.random() * chars.length)];
   }
-  return str4;
+  return str5;
 }
-function esc3(str4) {
-  return JSON.stringify(str4);
+function esc3(str5) {
+  return JSON.stringify(str5);
 }
 function slugify2(input) {
   return input.toLowerCase().trim().replace(/[^\w\s-]/g, "").replace(/[\s_-]+/g, "-").replace(/^-+|-+$/g, "");
@@ -42395,8 +42875,8 @@ var primitiveTypes3 = /* @__PURE__ */ new Set([
   "symbol",
   "undefined"
 ]);
-function escapeRegex3(str4) {
-  return str4.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+function escapeRegex3(str5) {
+  return str5.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 function clone3(inst, def, params) {
   const cl = new inst._zod.constr(def ?? inst._zod.def);
@@ -42662,13 +43142,13 @@ function getSizableOrigin3(input) {
   return "unknown";
 }
 var highSurrogate2 = /[\uD800-\uDBFF]/;
-function codePointLength2(str4) {
-  const units = str4.length;
-  if (!highSurrogate2.test(str4))
+function codePointLength2(str5) {
+  const units = str5.length;
+  if (!highSurrogate2.test(str5))
     return units;
   let count2 = units;
   for (let i = 0; i < units - 1; i++) {
-    if ((str4.charCodeAt(i) & 64512) === 55296 && (str4.charCodeAt(i + 1) & 64512) === 56320) {
+    if ((str5.charCodeAt(i) & 64512) === 55296 && (str5.charCodeAt(i + 1) & 64512) === 56320) {
       count2--;
       i++;
     }
@@ -42770,12 +43250,12 @@ function members2(proto, table3) {
       defineBound2(proto, key, desc.value);
   }
 }
-function own3(inst, key, value, enumerable = true) {
+function own4(inst, key, value, enumerable = true) {
   Object.defineProperty(inst, key, { configurable: true, writable: true, enumerable, value });
   return value;
 }
 function hide2(inst, key, value) {
-  return own3(inst, key, value, false);
+  return own4(inst, key, value, false);
 }
 // @__NO_SIDE_EFFECTS__
 function derived2(computes, table3) {
@@ -42785,10 +43265,10 @@ function derived2(computes, table3) {
       configurable: true,
       enumerable: true,
       get() {
-        return own3(this, key, compute(this));
+        return own4(this, key, compute(this));
       },
       set(value) {
-        own3(this, key, value);
+        own4(this, key, value);
       }
     });
   }
@@ -42798,10 +43278,10 @@ function defineBound2(proto, key, fn) {
   Object.defineProperty(proto, key, {
     configurable: true,
     get() {
-      return this == null ? fn : own3(this, key, fn.bind(this));
+      return this == null ? fn : own4(this, key, fn.bind(this));
     },
     set(value) {
-      own3(this, key, value);
+      own4(this, key, value);
     }
   });
 }
@@ -42924,12 +43404,12 @@ function $constructor3(name, initializer7, proto, params) {
     inst._zod.traits.add(name);
     initializer7(inst, def);
     if (initialized) {
-      const own4 = Object.getPrototypeOf(inst);
+      const own5 = Object.getPrototypeOf(inst);
       const ctorProto = inst._zod.constr.prototype;
-      let up = own4;
+      let up = own5;
       while (up && up !== ctorProto)
         up = Object.getPrototypeOf(up);
-      const target = up ?? own4;
+      const target = up ?? own5;
       if (!initialized.has(target)) {
         initialized.add(target);
         members2(target, protoMembers);
@@ -43790,7 +44270,7 @@ var $ZodType3 = /* @__PURE__ */ $constructor3("$ZodType", (inst, def) => {
     return hide2(this, "~standard", standardProps2(this));
   },
   set "~standard"(value) {
-    own3(this, "~standard", value);
+    own4(this, "~standard", value);
   }
 });
 var toStandardResult2 = (r, ctx) => r.issues.length ? { issues: r.issues.map((iss) => finalizeIssue3(iss, ctx, config3())) } : { value: r.value };
@@ -47657,8 +48137,8 @@ var parse5 = /* @__PURE__ */ _parse4(ZodRealError3);
 var parseAsync4 = /* @__PURE__ */ _parseAsync4(ZodRealError3);
 var safeParse4 = /* @__PURE__ */ _safeParse3(ZodRealError3);
 var safeParseAsync4 = /* @__PURE__ */ _safeParseAsync3(ZodRealError3);
-var encode12 = /* @__PURE__ */ _encode3(ZodRealError3);
-var decode12 = /* @__PURE__ */ _decode3(ZodRealError3);
+var encode13 = /* @__PURE__ */ _encode3(ZodRealError3);
+var decode13 = /* @__PURE__ */ _decode3(ZodRealError3);
 var encodeAsync2 = /* @__PURE__ */ _encodeAsync3(ZodRealError3);
 var decodeAsync2 = /* @__PURE__ */ _decodeAsync3(ZodRealError3);
 var safeEncode2 = /* @__PURE__ */ _safeEncode2(ZodRealError3);
@@ -47815,10 +48295,10 @@ var ZodType3 = /* @__PURE__ */ $constructor3("ZodType", (inst, def) => {
     return validateAsync3(this, data, params);
   },
   encode: function _encode4(data, params) {
-    return encode12(this, data, params, { callee: _encode4 });
+    return encode13(this, data, params, { callee: _encode4 });
   },
   decode: function _decode4(data, params) {
-    return decode12(this, data, params, { callee: _decode4 });
+    return decode13(this, data, params, { callee: _decode4 });
   },
   encodeAsync: async function _encodeAsync4(data, params) {
     return await encodeAsync2(this, data, params, { callee: _encodeAsync4 });
@@ -53372,7 +53852,7 @@ var require_code$1 = /* @__PURE__ */ __commonJSMin((exports) => {
   }
   exports._ = _;
   const plus = new _Code("+");
-  function str4(strs, ...args) {
+  function str5(strs, ...args) {
     const expr = [safeStringify(strs[0])];
     let i = 0;
     while (i < args.length) {
@@ -53383,7 +53863,7 @@ var require_code$1 = /* @__PURE__ */ __commonJSMin((exports) => {
     optimize(expr);
     return new _Code(expr);
   }
-  exports.str = str4;
+  exports.str = str5;
   function addCodeArg(code, arg) {
     if (arg instanceof _Code) code.push(...arg._items);
     else if (arg instanceof Name) code.push(arg);
@@ -53416,7 +53896,7 @@ var require_code$1 = /* @__PURE__ */ __commonJSMin((exports) => {
     if (typeof b == "string" && b[0] === '"' && !(a instanceof Name)) return `"${a}${b.slice(1)}`;
   }
   function strConcat(c12, c2) {
-    return c2.emptyStr() ? c12 : c12.emptyStr() ? c2 : str4`${c12}${c2}`;
+    return c2.emptyStr() ? c12 : c12.emptyStr() ? c2 : str5`${c12}${c2}`;
   }
   exports.strConcat = strConcat;
   function interpolate(x) {
@@ -54295,21 +54775,21 @@ var require_util = /* @__PURE__ */ __commonJSMin((exports) => {
     return (0, codegen_1._)`${topSchemaRef}${schemaPath}${(0, codegen_1.getProperty)(keyword)}`;
   }
   exports.schemaRefOrVal = schemaRefOrVal;
-  function unescapeFragment(str4) {
-    return unescapeJsonPointer(decodeURIComponent(str4));
+  function unescapeFragment(str5) {
+    return unescapeJsonPointer(decodeURIComponent(str5));
   }
   exports.unescapeFragment = unescapeFragment;
-  function escapeFragment(str4) {
-    return encodeURIComponent(escapeJsonPointer(str4));
+  function escapeFragment(str5) {
+    return encodeURIComponent(escapeJsonPointer(str5));
   }
   exports.escapeFragment = escapeFragment;
-  function escapeJsonPointer(str4) {
-    if (typeof str4 == "number") return `${str4}`;
-    return str4.replace(/~/g, "~0").replace(/\//g, "~1");
+  function escapeJsonPointer(str5) {
+    if (typeof str5 == "number") return `${str5}`;
+    return str5.replace(/~/g, "~0").replace(/\//g, "~1");
   }
   exports.escapeJsonPointer = escapeJsonPointer;
-  function unescapeJsonPointer(str4) {
-    return str4.replace(/~1/g, "/").replace(/~0/g, "~");
+  function unescapeJsonPointer(str5) {
+    return str5.replace(/~1/g, "/").replace(/~0/g, "~");
   }
   exports.unescapeJsonPointer = unescapeJsonPointer;
   function eachItem(xs, f) {
@@ -55195,8 +55675,8 @@ var require_json_schema_traverse = /* @__PURE__ */ __commonJSMin((exports, modul
       post(schema, jsonPtr, rootSchema, parentJsonPtr, parentKeyword, parentSchema, keyIndex);
     }
   }
-  function escapeJsonPtr(str4) {
-    return str4.replace(/~/g, "~0").replace(/\//g, "~1");
+  function escapeJsonPtr(str5) {
+    return str5.replace(/~/g, "~0").replace(/\//g, "~1");
   }
 });
 var require_resolve = /* @__PURE__ */ __commonJSMin((exports) => {
@@ -56088,9 +56568,9 @@ var require_utils = /* @__PURE__ */ __commonJSMin((exports, module) => {
       isIPV6: false
     };
   }
-  function findToken(str4, token) {
+  function findToken(str5, token) {
     let ind = 0;
-    for (let i = 0; i < str4.length; i++) if (str4[i] === token) ind++;
+    for (let i = 0; i < str5.length; i++) if (str5[i] === token) ind++;
     return ind;
   }
   function removeDotSegments(path8) {
@@ -56605,7 +57085,7 @@ var require_core$3 = /* @__PURE__ */ __commonJSMin((exports) => {
   const util_1 = require_util();
   const $dataRefSchema = require_data();
   const uri_1 = require_uri();
-  const defaultRegExp = (str4, flags) => new RegExp(str4, flags);
+  const defaultRegExp = (str5, flags) => new RegExp(str5, flags);
   defaultRegExp.code = "new RegExp";
   const META_IGNORE_OPTIONS = [
     "removeAdditional",
@@ -57311,16 +57791,16 @@ var require_multipleOf = /* @__PURE__ */ __commonJSMin((exports) => {
 });
 var require_ucs2length = /* @__PURE__ */ __commonJSMin((exports) => {
   Object.defineProperty(exports, "__esModule", { value: true });
-  function ucs2length(str4) {
-    const len = str4.length;
+  function ucs2length(str5) {
+    const len = str5.length;
     let length = 0;
     let pos = 0;
     let value;
     while (pos < len) {
       length++;
-      value = str4.charCodeAt(pos++);
+      value = str5.charCodeAt(pos++);
       if (value >= 55296 && value <= 56319 && pos < len) {
-        value = str4.charCodeAt(pos);
+        value = str5.charCodeAt(pos);
         if ((value & 64512) === 56320) pos++;
       }
     }
@@ -60031,8 +60511,8 @@ var require_formats = /* @__PURE__ */ __commonJSMin((exports) => {
     30,
     31
   ];
-  function date10(str4) {
-    const matches2 = DATE.exec(str4);
+  function date10(str5) {
+    const matches2 = DATE.exec(str5);
     if (!matches2) return false;
     const year = +matches2[1];
     const month = +matches2[2];
@@ -60047,8 +60527,8 @@ var require_formats = /* @__PURE__ */ __commonJSMin((exports) => {
   }
   const TIME = /^(\d\d):(\d\d):(\d\d(?:\.\d+)?)(z|([+-])(\d\d)(?::?(\d\d))?)?$/i;
   function getTime(strictTimeZone) {
-    return function time7(str4) {
-      const matches2 = TIME.exec(str4);
+    return function time7(str5) {
+      const matches2 = TIME.exec(str5);
       if (!matches2) return false;
       const hr = +matches2[1];
       const min = +matches2[2];
@@ -60085,8 +60565,8 @@ var require_formats = /* @__PURE__ */ __commonJSMin((exports) => {
   const DATE_TIME_SEPARATOR = /t|\s/i;
   function getDateTime(strictTimeZone) {
     const time7 = getTime(strictTimeZone);
-    return function date_time(str4) {
-      const dateTime = str4.split(DATE_TIME_SEPARATOR);
+    return function date_time(str5) {
+      const dateTime = str5.split(DATE_TIME_SEPARATOR);
       return dateTime.length === 2 && date10(dateTime[0]) && time7(dateTime[1]);
     };
   }
@@ -60107,13 +60587,13 @@ var require_formats = /* @__PURE__ */ __commonJSMin((exports) => {
   }
   const NOT_URI_FRAGMENT = /\/|:/;
   const URI = /^(?:[a-z][a-z0-9+\-.]*:)(?:\/?\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:]|%[0-9a-f]{2})*@)?(?:\[(?:(?:(?:(?:[0-9a-f]{1,4}:){6}|::(?:[0-9a-f]{1,4}:){5}|(?:[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){4}|(?:(?:[0-9a-f]{1,4}:){0,1}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){3}|(?:(?:[0-9a-f]{1,4}:){0,2}[0-9a-f]{1,4})?::(?:[0-9a-f]{1,4}:){2}|(?:(?:[0-9a-f]{1,4}:){0,3}[0-9a-f]{1,4})?::[0-9a-f]{1,4}:|(?:(?:[0-9a-f]{1,4}:){0,4}[0-9a-f]{1,4})?::)(?:[0-9a-f]{1,4}:[0-9a-f]{1,4}|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?))|(?:(?:[0-9a-f]{1,4}:){0,5}[0-9a-f]{1,4})?::[0-9a-f]{1,4}|(?:(?:[0-9a-f]{1,4}:){0,6}[0-9a-f]{1,4})?::)|[Vv][0-9a-f]+\.[a-z0-9\-._~!$&'()*+,;=:]+)\]|(?:(?:25[0-5]|2[0-4]\d|[01]?\d\d?)\.){3}(?:25[0-5]|2[0-4]\d|[01]?\d\d?)|(?:[a-z0-9\-._~!$&'()*+,;=]|%[0-9a-f]{2})*)(?::\d*)?(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*|\/(?:(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)?|(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})+(?:\/(?:[a-z0-9\-._~!$&'()*+,;=:@]|%[0-9a-f]{2})*)*)(?:\?(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?(?:#(?:[a-z0-9\-._~!$&'()*+,;=:@/?]|%[0-9a-f]{2})*)?$/i;
-  function uri(str4) {
-    return NOT_URI_FRAGMENT.test(str4) && URI.test(str4);
+  function uri(str5) {
+    return NOT_URI_FRAGMENT.test(str5) && URI.test(str5);
   }
   const BYTE = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/gm;
-  function byte(str4) {
+  function byte(str5) {
     BYTE.lastIndex = 0;
-    return BYTE.test(str4);
+    return BYTE.test(str5);
   }
   const MIN_INT32 = -(2 ** 31);
   const MAX_INT32 = 2 ** 31 - 1;
@@ -60127,10 +60607,10 @@ var require_formats = /* @__PURE__ */ __commonJSMin((exports) => {
     return true;
   }
   const Z_ANCHOR = /[^\\]\\Z/;
-  function regex(str4) {
-    if (Z_ANCHOR.test(str4)) return false;
+  function regex(str5) {
+    if (Z_ANCHOR.test(str5)) return false;
     try {
-      new RegExp(str4);
+      new RegExp(str5);
       return true;
     } catch (e) {
       return false;
@@ -62639,9 +63119,11 @@ async function workspaceFromRoots(server) {
   }
   return void 0;
 }
-function workspaceCwdOf(meta3, spawnCwd, script) {
+function workspaceCwdOf(meta3, spawnCwd, script, env) {
   const fromHost = workspaceFromMeta(meta3);
   if (fromHost !== void 0) return fromHost;
+  const pluginRoot = env?.[ANTIGRAVITY_PLUGIN_ROOT_ENV];
+  if (pluginRoot !== void 0 && pluginRoot !== "" && realOrSame(spawnCwd) === realOrSame(pluginRoot)) return "";
   if (script === void 0 || script === "") return spawnCwd;
   return realOrSame(spawnCwd) === realOrSame(dirname15(script)) ? "" : spawnCwd;
 }
@@ -62700,12 +63182,13 @@ async function startServer(argv, env) {
     return async (input, req) => {
       const meta3 = req.mcpReq._meta;
       const agent = resolveAgent(argv, env);
-      const fromRoots = agent === "vscode" && !hasWorkspaceFolder(argv) ? await workspaceFromRoots(server) : void 0;
-      const callArgv = fromRoots === void 0 ? argv : [...argv, WORKSPACE_FOLDER_FLAG, fromRoots];
+      const fromRoots = agent === "vscode" && !hasWorkspaceFolder(argv) || agent === "antigravity" ? await workspaceFromRoots(server) : void 0;
+      const callArgv = agent === "vscode" && fromRoots !== void 0 ? [...argv, WORKSPACE_FOLDER_FLAG, fromRoots] : argv;
+      const callCwd = agent === "antigravity" && fromRoots !== void 0 ? fromRoots : workspaceCwdOf(meta3, process.cwd(), process.argv[1], env);
       let project;
       const projectOf = () => {
         if (agent === void 0) throw new CtxError("NO_PROJECT", { kind: "--agent" });
-        project ??= resolveProject(agent, { env, argv: callArgv, cwd: workspaceCwdOf(meta3, process.cwd(), process.argv[1]), piCwd: void 0 });
+        project ??= resolveProject(agent, { env, argv: callArgv, cwd: callCwd, piCwd: void 0 });
         return project;
       };
       const ctx = {
@@ -62809,12 +63292,12 @@ if (isEntry(import.meta.main, process.argv[1], fileURLToPath3(import.meta.url)))
 }
 
 // src/entries/pi.ts
-function str3(v) {
+function str4(v) {
   return typeof v === "string" ? v : "";
 }
 function appendPayload(base, payload) {
   if (Array.isArray(base)) return [...base, payload];
-  const text = str3(base);
+  const text = str4(base);
   return text === "" ? payload : text + "\n\n" + payload;
 }
 var SECTION = "context_mode";
@@ -62832,7 +63315,7 @@ function deliver(event, payload) {
 function textOf2(content) {
   if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
-  return content.map((part) => part.type === "text" ? str3(part.text) : "").join("");
+  return content.map((part) => part.type === "text" ? str4(part.text) : "").join("");
 }
 function field(v, key) {
   return typeof v === "object" && v !== null && !Array.isArray(v) ? v[key] : void 0;
@@ -62873,8 +63356,8 @@ function hostExtension(pi, host = "pi") {
   let toolsRegistered = false;
   let openPrompt;
   function identify(ctx) {
-    if (sessionId === "") sessionId = str3(ctx?.sessionManager?.getSessionId());
-    if (cwd === "") cwd = str3(ctx?.cwd);
+    if (sessionId === "") sessionId = str4(ctx?.sessionManager?.getSessionId());
+    if (cwd === "") cwd = str4(ctx?.cwd);
   }
   function hook(raw, atTurn) {
     return handleHook(agent, { ...raw, sessionId, cwd, turn: atTurn }, env);
@@ -62952,7 +63435,7 @@ function hostExtension(pi, host = "pi") {
   pi.on("input", async (event, ctx) => {
     identify(ctx);
     openPrompt = void 0;
-    await hook({ type: "input", message: str3(event.text) }, turn + 1);
+    await hook({ type: "input", message: str4(event.text) }, turn + 1);
     return void 0;
   });
   pi.on("tool_call", async (event, ctx) => {
@@ -62969,7 +63452,7 @@ function hostExtension(pi, host = "pi") {
       input: event.input,
       content: textOf2(event.content),
       isError: event.isError === true,
-      keep: excludedTools(pi, host).includes(str3(event.toolName))
+      keep: excludedTools(pi, host).includes(str4(event.toolName))
     }, turn);
     if (out.stdout === "") return void 0;
     const patch = { content: [{ type: "text", text: out.stdout }] };

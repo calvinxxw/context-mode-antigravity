@@ -6,15 +6,16 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import {
-  AGENT_ARG, AGENT_HOME_DIR, D3_NO_SETUP_FIX, NATIVE_INSTALL, V1_REASON, D3_ROOT_DETAIL, D3_ROOT_FIX, MCP_ARGS_FIELD, MCP_COMMAND_FIELD, PLUGIN_CACHE_DIR_NAME, SERVER_ENTRY_FILE, SERVER_KEY, CODEX_FEATURES_HOOKS_KEY, CONFIG_TOML_FILE, D3_DETAIL, D3_PARTS, D4_REASON_JOIN,
+  AGENT_ARG, AGENT_HOME_DIR, ANTIGRAVITY_MCP_FILE, CONFIG_JSON_FILE, D3_NO_SETUP_FIX, NATIVE_INSTALL, V1_REASON, D3_ROOT_DETAIL, D3_ROOT_FIX, MCP_ARGS_FIELD, MCP_COMMAND_FIELD, PLUGIN_CACHE_DIR_NAME, SERVER_ENTRY_FILE, SERVER_KEY, CODEX_FEATURES_HOOKS_KEY, CONFIG_TOML_FILE, D3_DETAIL, D3_PARTS, D4_REASON_JOIN,
   D5B_DETAIL, D5B_FIX, DOCTOR_FIX_UPGRADE, DOCTOR_LABEL, DOCTOR_PASS_DETAIL, HOOK_COMMAND_FIELD, HOOK_COMMAND_SEP,
   HOOK_ENTRY_FILE, HOOK_SCRIPT_SEPS, HOOK_GROUP_HOOKS_FIELD, HOOKS_JSON_FILE, HOOK_HOST_FILE, HOOK_MATCHER_FIELD, HOST_CONFIG_DIR_NAME, HOST_NODE_COMMAND, EXE_SUFFIX,
-  HOOKS_KEY, MCP_ANY_MATCH, POST_TOOL_USE, KIRO_ACTION_FIELD, KIRO_TOOL_MATCHERS, KIRO_TRIGGER_FIELD, MATCHER_ALT, MATCHER_ANY, MATCHER_CLOSE, MATCHER_OPEN,
+  HOOKS_KEY, HOST_PLUGINS_DIR_NAME, MCP_ANY_MATCH, POST_TOOL_USE, KIRO_ACTION_FIELD, KIRO_TOOL_MATCHERS, KIRO_TRIGGER_FIELD, MATCHER_ALT, MATCHER_ANY, MATCHER_CLOSE, MATCHER_OPEN,
   OPENCODE_BASE_CONFIG_FILE, OPENCODE_CONFIG_FILES, OPENCODE_GIT_SPEC, OPENCODE_NPM_SPEC_PREFIX, OPENCODE_MCP_COMMAND_FIELD, OPENCODE_PACKAGE_FIELD, OPENCODE_PLUGIN_KEY, OPENCODE_PLUGIN_PATH, OPENCODE_PLUGINS_KEY, OWN_MCP_ENTRY, OWN_TOOL_PREFIX, REGEX_ESCAPE,
   REGEX_SPECIAL_CHARS, SETTINGS_FILE, SHELL_QUOTE, TOOL_HOOK_EVENTS, V1_PATH_SEPS, VSCODE_CLAUDE_HOOKS_SETTING,
   VSCODE_DIR_NAME, VSCODE_SETTINGS_FILE, OMP_CONTENT_INFO, OMP_ENABLE_COMMAND, OMP_FLOOR_INFO, OMP_IMPORT_INFO, OMP_MIN_VERSION, OMP_PRINT_MODE_INFO,
   OMP_SCRIPTS_INFO, PI_PACKAGE_JSON_FILE,
 } from "../contracts/constants.ts";
+import { PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX } from "../../adapters/antigravity.ts";
 import type { AdapterRow, AgentId, DoctorRow } from "../contracts/types.ts";
 import { hasReplace } from "../../adapters/table.ts";
 import { codexDirOf, copilotDirOf, homeDirOf, kiroDirOf, opencodeDirOf, ownMcpFileOf, piAgentDirOf } from "../project/config-dir.ts";
@@ -104,6 +105,22 @@ function ownHooks(block: unknown, shape: string, timeoutKey: string, native: str
     }
     return out;
   }
+  if (shape === "antigravity") {
+    if (!isObject(block) || block.enabled === false) return out;
+    for (const e of list(block[native])) {
+      if (!isObject(e)) continue;
+      if (Array.isArray(e[HOOK_GROUP_HOOKS_FIELD])) {
+        for (const h of list(e[HOOK_GROUP_HOOKS_FIELD])) {
+          if (isObject(h) && isOwnCommand(h[HOOK_COMMAND_FIELD], agent)) {
+            out.push({ command: h[HOOK_COMMAND_FIELD] as string, matcher: e[HOOK_MATCHER_FIELD], timeout: h[timeoutKey] });
+          }
+        }
+      } else if (isOwnCommand(e[HOOK_COMMAND_FIELD], agent)) {
+        out.push({ command: e[HOOK_COMMAND_FIELD] as string, matcher: undefined, timeout: e[timeoutKey] });
+      }
+    }
+    return out;
+  }
   const entries = isObject(block) ? list(block[native]) : [];
   for (const e of entries) {
     if (!isObject(e)) continue;
@@ -167,10 +184,22 @@ function codexNativeDir(env: NodeJS.ProcessEnv, home: string): string | null {
   return found.length === 0 ? null : found[found.length - 1];
 }
 
-/** The plugin's MCP entry: node, the bundle, --agent codex. cwd "." is the plugin dir; the server finds the workspace in _meta. */
-function nativeMcpWrong(dir: string, row: AdapterRow): boolean {
+/** Native Antigravity plugin dir (~/.gemini/config/plugins/context-mode) when installed and not disabled in config.json. */
+function antigravityNativeDir(home: string): string | null {
+  const cfgDir = join(home, ...AGENT_HOME_DIR.antigravity);
+  const dir = join(cfgDir, HOST_PLUGINS_DIR_NAME, SERVER_KEY);
+  if (!existsSync(join(dir, ANTIGRAVITY_MCP_FILE)) || !existsSync(join(dir, HOOKS_JSON_FILE))) return null;
+  const cfg = readJson(join(cfgDir, CONFIG_JSON_FILE));
+  const plugins = isObject(cfg) && isObject(cfg.plugins) ? cfg.plugins : undefined;
+  const entry = plugins && isObject(plugins[SERVER_KEY]) ? plugins[SERVER_KEY] : undefined;
+  if (entry && entry.enabled === false) return null;
+  return dir;
+}
+
+/** The plugin's MCP entry: node, the bundle, --agent <id>. */
+function nativeMcpWrong(dir: string, row: AdapterRow, mcpFileName: string = CODEX_PLUGIN_MCP_FILE): boolean {
   try {
-    const entry = hostConfigValueAt(readParsed(row.id, join(dir, CODEX_PLUGIN_MCP_FILE)).value, [MCP_SERVERS_FIELD, SERVER_KEY]);
+    const entry = hostConfigValueAt(readParsed(row.id, join(dir, mcpFileName)).value, [MCP_SERVERS_FIELD, SERVER_KEY]);
     if (!isObject(entry)) return true;
     const args = list(entry[MCP_ARGS_FIELD]);
     const script = args[0];
@@ -336,6 +365,8 @@ function opencodeListed(file: string, worktree: string): boolean {
 function mcpWrong(row: AdapterRow, home: string, env: NodeJS.ProcessEnv, worktree: string): boolean {
   const native = row.id === "codex" ? codexNativeDir(env, home) : null;
   if (native !== null) return nativeMcpWrong(native, row);
+  const agyNative = row.id === "antigravity" ? antigravityNativeDir(home) : null;
+  if (agyNative !== null) return nativeMcpWrong(agyNative, row, ANTIGRAVITY_MCP_FILE);
   const file = mcpFile(row, home, env);
   try {
     if (file === null) {
@@ -356,7 +387,9 @@ function mcpWrong(row: AdapterRow, home: string, env: NodeJS.ProcessEnv, worktre
 function hookFile(row: AdapterRow, spec: NonNullable<(typeof HOOK_HOST_FILE)[AgentId]>, home: string, env: NodeJS.ProcessEnv, worktree: string): string {
   const root = spec.root === "plugin" ? resolvePluginRoot(row, env, worktree) : spec.root === "home" ? home : worktree;
   const native = row.id === "codex" ? codexNativeDir(env, home) : null;
+  const agyNative = row.id === "antigravity" ? antigravityNativeDir(home) : null;
   const file = native !== null ? join(native, CODEX_PLUGIN_HOOKS_FILE) // D-C166-NATIVE-CWD-1: the plugin's own hook file
+      : agyNative !== null ? join(agyNative, HOOKS_JSON_FILE)
       : row.id === "codex" ? join(codexDirOf(env, home), HOOKS_JSON_FILE) // D-N6-CODEX-HOME-2
       : row.id === "copilot-cli" ? join(copilotDirOf(env, home), ...spec.file.slice(1)) // D-WIN-COPILOT-HOME-1: file = [".copilot", ...]
       : row.id === "kiro" ? join(kiroDirOf(env, home), ...spec.file.slice(1)) // D-WIN-KIRO-HOME-1: file = [".kiro", ...]
@@ -391,7 +424,11 @@ function hookParts(row: AdapterRow, home: string, env: NodeJS.ProcessEnv, worktr
       continue;
     }
     if (own.length !== 1) { hooksBad = true; continue; }
-    if (spec.matcher && TOOL_HOOK_EVENTS.includes(canonical) && own[0].matcher !== composeMatcher(row, canonical)) hooksBad = true;
+    if (spec.matcher && TOOL_HOOK_EVENTS.includes(canonical)) {
+      const wantGlobal = composeMatcher(row, canonical);
+      const wantPlugin = row.id === "antigravity" ? composeMatcher({ ...row, toolNamePrefix: ANTIGRAVITY_PLUGIN_TOOL_PREFIX }, canonical) : wantGlobal;
+      if (own[0].matcher !== wantGlobal && own[0].matcher !== wantPlugin) hooksBad = true;
+    }
     if (!validTimeout(own[0].timeout)) timeoutBad = true;
   }
   return [...(hooksBad ? [PART_HOOKS] : []), ...(timeoutBad ? [PART_TIMEOUT] : [])];
@@ -507,6 +544,8 @@ export function configPaths(row: AdapterRow, env: NodeJS.ProcessEnv, worktree: s
   if (mcp !== null) out.push({ label: "MCP entry", path: mcp });
   const native = row.id === "codex" ? codexNativeDir(env, home) : null;
   if (native !== null) out.push({ label: "Codex plugin MCP", path: join(native, CODEX_PLUGIN_MCP_FILE) });
+  const agyNative = row.id === "antigravity" ? antigravityNativeDir(home) : null;
+  if (agyNative !== null) out.push({ label: "Antigravity plugin MCP", path: join(agyNative, ANTIGRAVITY_MCP_FILE) });
   const spec = HOOK_HOST_FILE[row.id];
   if (spec !== null) {
     try {

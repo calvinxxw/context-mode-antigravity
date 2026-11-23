@@ -136,7 +136,7 @@ export interface CheckRow {
  *  extensions list). enable = the host command that turns a listed but disabled install back on (doctor names it). */
 export interface NativePlugin {
   bin: string; args: string[]; plugin: string; hooksVia: string; skillsVia: string;
-  format: "codex-json" | "extension" | "json"; enable?: string[];
+  format: "codex-json" | "extension" | "json" | "agy-json"; enable?: string[];
   /** D-NI-CODEX-TRUST-1: the host runs a plugin hook only once its config trusts it (Codex hooks/list trustStatus). */
   hookTrust?: boolean;
 }
@@ -157,6 +157,8 @@ const NATIVE_PLUGIN: Partial<Record<AgentId, NativePlugin>> = {
   // <plugin>/.zcode-plugin/plugin.json (MCP server, hooks run with --agent zcode) and the package skills/.
   zcode: { bin: "zcode", args: ["plugins", "list", "--json"], plugin: PLUGIN_ID, hooksVia: ".zcode-plugin", skillsVia: SKILLS_DIR_NAME, format: "json",
     enable: ["plugins", "enable", PLUGIN_ID] },
+  antigravity: { bin: "agy", args: ["plugin", "list", "--json"], plugin: SERVER_KEY, hooksVia: "hooks.json", skillsVia: SKILLS_DIR_NAME, format: "agy-json",
+    enable: ["plugin", "enable", SERVER_KEY] },
 };
 
 const CELLAR_SEGMENT = "/Cellar/";
@@ -184,7 +186,7 @@ export function stableNodePath(execPath: string, fs: NodePathFs = REAL_FS): stri
   return execPath;
 }
 
-/** Agents whose Windows hook shell may be PowerShell: their written hook line starts with bare `node`
+/** Agents whose Windows hook shell is PowerShell (codex, qwen, copilot-cli, vscode): their written hook line starts with bare `node`
  *  (D-C166-WIN-FIRE-1 codex, D-R44-QWEN-WIN-1 qwen, D-1375-COPILOT-WIN-1 copilot-cli and vscode). */
 const BARE_NODE_ON_WINDOWS: readonly AgentId[] = ["codex", "qwen", "copilot-cli", "vscode"];
 
@@ -203,6 +205,16 @@ export function hookCommandString(row: CheckRow): string {
 
 function golden(row: AdapterRow, home: string): Record<string, unknown> {
   const shell = row.nativeTools.shell?.[0];
+  if (row.id === "antigravity") {
+    return {
+      hookEventName: row.eventMap.PreToolUse ?? "PreToolUse",
+      conversationId: "context-mode-setup-verify",
+      cwd: home,
+      workspacePaths: [home],
+      stepIdx: 0,
+      toolCall: { id: "call_verify", name: shell ?? "ctx_execute", args: { CommandLine: "true" } },
+    };
+  }
   return {
     hook_event_name: row.eventMap.PreToolUse ?? "PreToolUse",
     session_id: "context-mode-setup-verify",

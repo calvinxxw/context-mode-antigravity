@@ -62,6 +62,18 @@ export function hookSample(id: AgentId, cwd: string, text: string): HookSample {
     case "kiro":
     case "zcode":
       return { effect, payload: { hook_event_name: event, session_id: SAMPLE_SESSION, cwd, tool_name: tool, tool_input: command } };
+    case "antigravity":
+      return {
+        effect,
+        payload: {
+          hookEventName: event,
+          conversationId: SAMPLE_SESSION,
+          cwd,
+          workspacePaths: [cwd],
+          stepIdx: 0,
+          toolCall: { id: "call_sample", name: tool, args: { CommandLine: SAMPLE_COMMAND } },
+        },
+      };
   }
 }
 

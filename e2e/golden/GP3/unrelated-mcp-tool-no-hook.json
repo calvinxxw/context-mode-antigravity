@@ -18,5 +18,10 @@
     "no-hook",
     "no-hook",
     "no-hook"
+  ],
+  "antigravity": [
+    "no-hook",
+    "no-hook",
+    "no-hook"
   ]
 }

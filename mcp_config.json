@@ -1,0 +1,29 @@
+{
+  "mcpServers": {
+    "context-mode": {
+      "args": [
+        "${PLUGIN_ROOT}/plugins/claude-code/server.mjs",
+        "--agent",
+        "antigravity"
+      ],
+      "command": "node",
+      "tools": {
+        "ctx_batch": {
+          "eager": true
+        },
+        "ctx_execute": {
+          "eager": true
+        },
+        "ctx_index": {
+          "eager": true
+        },
+        "ctx_resume": {
+          "eager": true
+        },
+        "ctx_search": {
+          "eager": true
+        }
+      }
+    }
+  }
+}

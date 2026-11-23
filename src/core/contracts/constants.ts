@@ -41,7 +41,7 @@ export const REPLACE_TRIGGER_BYTES = readReplaceTrigger(process.env[REPLACE_TRIG
 // D-R41-READ-OFFSET-1 (#1314): a read-like tool (canonical name) called with a range key is the user's own window:
 // PostToolUse lets it through whole. Claude Code, Pi, Gemini: offset/limit; VS Code read_file and Copilot view map to them.
 export const RANGE_READ_TOOLS = Object.freeze(["Read", "view"]);
-export const READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range"]);
+export const READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range", "StartLine", "EndLine"]);
 // D-1404-SKILL-LOAD-1 (#1404): a skill-load tool (canonical name) returns a skill's instructions, which the model must
 // read whole: PostToolUse lets it through. Claude Code calls it Skill (its PostToolUse matcher leaves it out); OpenCode's
 // native `skill` maps to it. Every other tool output over the trigger keeps the replace.
@@ -267,7 +267,7 @@ export const LIVE_MODEL = "claude-sonnet-5";
 export const LIVE_EFFORT = "low";
 export const LIVE_BUDGET_USD = 0.25;
 export const LIVE_SKIP_LIMIT = 3;
-export const README_MAX_LINES = 700; // ADR-0015: CI cap on README.md length (D-README-THESIS-1: 200 -> 400; D-README-DWELL-1: 400 -> 600; D-TIC-README-1: 600 -> 650; D-TIC-README-3: 650 -> 700)
+export const README_MAX_LINES = 730; // ADR-0015: CI cap on README.md length (D-README-THESIS-1: 200 -> 400; D-README-DWELL-1: 400 -> 600; D-TIC-README-1: 600 -> 650; D-TIC-README-3: 650 -> 700; antigravity block: 730)
 
 // Enforcement (M3; impl/08 §2.3 step 2a, §2.4, §6.1 steps 3, 5b, 5d, 6, §6.2; DEVIATIONS D-M3-arch-5:
 // the text templates are fixed strings here; the Read deny is a src/prompt template, D-DU-DENY-1).
@@ -313,10 +313,10 @@ export const HOOK_FAIL_PRE_EVENTS = Object.freeze(["pretooluse", "beforetool", "
 export const HOOK_FAULT_ENV = "CM_HOOK_FAULT"; // test seam: one of HOOK_FAULT_STAGES makes that stage throw once, so every failure path is testable
 export const HOOK_FAULT_STAGES = Object.freeze(["decode", "project", "policy", "store", "encode"] as const);
 export const HOOK_FAIL_TOOLS = Object.freeze({
-  shell: Object.freeze(["Bash", "bash", "shell"]),
-  read: Object.freeze(["Read", "read_file"]),
+  shell: Object.freeze(["Bash", "bash", "shell", "run_command"]),
+  read: Object.freeze(["Read", "read_file", "view_file"]),
   grep: Object.freeze(["Grep", "grep_search"]),
-  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch"]),
+  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch", "read_url_content"]),
 });
 export function HOOK_FAIL_LINE(label: string, prefix: string): string { return `${DENY_PREFIX}the hook failed (${label}). Fix: run ${prefix}ctx_doctor.`; } // prefix: the host's own tool prefix (D-HL-NAMES-1)
 export const HOOK_FAIL_REDIRECT = Object.freeze({
@@ -373,8 +373,8 @@ export const DUMP_COUNT_FLAGS = Object.freeze(["-n", "-c", "--lines", "--bytes"]
 export const SED_COMMAND = "sed";
 export const SED_QUIET_FLAGS = Object.freeze(["-n", "--quiet", "--silent"] as const); // "sed -n" only
 export const JQ_COMMAND = "jq"; // a dump only with the identity filter (D-M3-E4-7)
-// impl/08 §6.1 step 6: Read input path key per host shape (Claude file_path, Gemini/Qwen absolute_path, path). D-M3-E4-4.
-export const READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath"] as const); // filePath: OpenCode (D-R44-OC-READ-1)
+// impl/08 §6.1 step 6: Read input path key per host shape (Claude file_path, Gemini/Qwen absolute_path, path, Antigravity AbsolutePath/Path). D-M3-E4-4.
+export const READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath", "AbsolutePath", "Path"] as const); // filePath: OpenCode (D-R44-OC-READ-1)
 export const READ_PATH_LIST_KEY = "filePaths"; // OpenCode 2 multi-read: an array of paths (D-R44-OC-READ-1)
 // D-R47-READ-MEDIA-1 (#1321, #1324): a read the host shows as an image or document block costs image tokens, not
 // text bytes, so the Read size deny and the replace skip it. A file is media when its extension AND its first bytes
@@ -399,7 +399,7 @@ const READ_IMAGES_AND_PDF: readonly ReadMediaType[] = Object.freeze([...READ_IMA
  *  ships a closed binary and kiro a closed host, so no media path is checked there.
  *  A host with no checked media path keeps the size deny for every file. */
 export const READ_MEDIA_BY_AGENT: Readonly<Record<AgentId, readonly ReadMediaType[]>> = Object.freeze({
-  "claude-code": READ_IMAGES_AND_PDF, gemini: READ_IMAGES_AND_PDF, qwen: READ_IMAGES_AND_PDF, opencode: READ_IMAGES_AND_PDF,
+  "claude-code": READ_IMAGES_AND_PDF, gemini: READ_IMAGES_AND_PDF, qwen: READ_IMAGES_AND_PDF, opencode: READ_IMAGES_AND_PDF, antigravity: READ_IMAGES_AND_PDF,
   pi: READ_IMAGES, omp: READ_IMAGES, vscode: READ_IMAGES, zcode: READ_IMAGES, "copilot-cli": [], codex: [], kiro: [],
 });
 
@@ -661,6 +661,7 @@ export const AGENT_HOME_DIR: Readonly<Record<AgentId, readonly string[]>> = Obje
   "claude-code": [".claude"], codex: [".codex"], gemini: [".gemini"], qwen: [".qwen"], "copilot-cli": [".copilot"],
   vscode: [".vscode"], kiro: [".kiro"], zcode: [".zcode"], pi: [".pi"], opencode: [".config", "opencode"],
   omp: [".omp"], // ADR-0026: OMP data and plugins live under ~/.omp
+  antigravity: [".gemini", "config"], // Google Antigravity unified global config dir (App, CLI, IDE)
 });
 export const UPGRADE_RESTART_LINE = "restart needed"; // impl/07 §6 step 8
 export const UPGRADE_HOST_AREA = "host update"; // impl/07 §6 step 4
@@ -743,9 +744,6 @@ export function D3_ROOT_DETAIL(paths: readonly string[]): string { return `pick 
 export interface UnsupportedHost { id: string; name: string; clientNames: readonly string[]; envVars: readonly string[]; pluginPaths: readonly (readonly string[])[]; configDirs: readonly string[]; binaries: readonly string[]; source: string; }
 const unsupported = (h: UnsupportedHost): UnsupportedHost => Object.freeze(h);
 export const UNSUPPORTED_HOSTS: readonly UnsupportedHost[] = Object.freeze([
-  unsupported({ id: "antigravity", name: "Antigravity", clientNames: ["antigravity", "antigravity-client", "antigravity-cli", "agy"], envVars: ["ANTIGRAVITY_CLI_ALIAS"],
-    pluginPaths: [[".gemini", "config", "plugins"], [".gemini", "antigravity", "plugins"], [".gemini", "antigravity-cli", "plugins"], [".gemini", "antigravity-ide", "plugins"]],
-    configDirs: [".gemini/antigravity", ".gemini/antigravity-cli", ".gemini/config"], binaries: ["agy"], source: "v1.0.169:src/adapters/client-map.ts:15-17; detect.ts:156,481-483; #1340" }),
   unsupported({ id: "cursor", name: "Cursor", clientNames: ["cursor-vscode"], envVars: ["CURSOR_TRACE_ID", "CURSOR_CLI", "CURSOR_CWD"],
     pluginPaths: [], configDirs: [".cursor"], binaries: [], source: "v1.0.169:src/adapters/client-map.ts:18; detect.ts:163-165,584" }),
   unsupported({ id: "openclaw", name: "OpenClaw", clientNames: [], envVars: [],
@@ -769,7 +767,7 @@ export function D3_ROOT_FIX(installs: readonly { key: string; scope: string }[])
 // "project" = the repo worktree. null = in-process agent, no hook file.
 export const HOOK_HOST_FILE: Readonly<Record<AgentId, {
   root: "plugin" | "home" | "project"; file: readonly string[]; key: readonly string[];
-  shape: "nested" | "flat" | "kiro" | "zcode"; timeoutKey: string; matcher: boolean;
+  shape: "nested" | "flat" | "kiro" | "zcode" | "antigravity"; timeoutKey: string; matcher: boolean;
 } | null>> = Object.freeze({
   "claude-code": { root: "plugin", file: ["hooks", "claude-code.json"], key: ["hooks"], shape: "nested", timeoutKey: "timeout", matcher: true },
   codex: { root: "home", file: [".codex", "hooks.json"], key: ["hooks"], shape: "nested", timeoutKey: "timeout", matcher: true },
@@ -782,6 +780,7 @@ export const HOOK_HOST_FILE: Readonly<Record<AgentId, {
   pi: null,
   opencode: null,
   omp: null, // ADR-0026: in-process, no hook file
+  antigravity: { root: "home", file: [".gemini", "config", "hooks.json"], key: [SERVER_KEY], shape: "antigravity", timeoutKey: "timeout", matcher: true },
 });
 export const TOOL_HOOK_EVENTS: readonly string[] = Object.freeze(["PreToolUse", "PostToolUse"]); // canonical events that carry the matcher
 export const HOOK_MATCHER_FIELD = "matcher";
@@ -874,6 +873,7 @@ export const UPGRADE_HOST_COMMAND: Readonly<Record<AgentId, string>> = Object.fr
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
   zcode: "npm i -g context-mode && context-mode setup --agents zcode",
+  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode",
 });
 // Old install forms, kept so uninstall and doctor still find and remove them (ADR-0011 Pi and OpenCode rows).
 export const PI_GIT_PACKAGE = "git:github.com/mksglu/context-mode@release"; // old Pi git entry (uninstall removes it)
@@ -1055,6 +1055,16 @@ export const CODEX_OMIT_DEFERRED: readonly string[] = Object.freeze(["deferred"]
 // auto|prompt|approve) lets our own read-only ctx tools run, the same key the plugin mcp.json sets.
 export const CODEX_APPROVAL_MODE_FIELD = "default_tools_approval_mode";
 export const CODEX_APPROVAL_APPROVE = "approve";
+// Antigravity defaults MCP tools to lazy-loaded; eager-loading the 5 hot-path tools lets the agent call them directly in one turn (https://antigravity.google/docs/mcp.md).
+export const ANTIGRAVITY_EAGER_TOOLS = Object.freeze({
+  ctx_execute: Object.freeze({ eager: true }),
+  ctx_batch: Object.freeze({ eager: true }),
+  ctx_index: Object.freeze({ eager: true }),
+  ctx_search: Object.freeze({ eager: true }),
+  ctx_resume: Object.freeze({ eager: true }),
+});
+export const ANTIGRAVITY_PLUGIN_ROOT_ENV = "PLUGIN_ROOT";
+export const ANTIGRAVITY_MCP_FILE = "mcp_config.json";
 export const OWN_MCP_ENTRY: Readonly<Partial<Record<AgentId, OwnMcpEntry>>> = Object.freeze({
   codex: { file: [".codex", "config.toml"], key: ["mcp_servers", SERVER_KEY], fields: { [CODEX_OMIT_TOOLS_FROM_FIELD]: CODEX_OMIT_DEFERRED, [CODEX_APPROVAL_MODE_FIELD]: CODEX_APPROVAL_APPROVE } },
   vscode: { file: [VSCODE_MCP_FILE], key: ["servers", SERVER_KEY] },
@@ -1062,6 +1072,10 @@ export const OWN_MCP_ENTRY: Readonly<Partial<Record<AgentId, OwnMcpEntry>>> = Ob
   zcode: {
     file: [".zcode", "cli", "config.json"], key: ["mcp", "servers", SERVER_KEY],
     fields: { type: "stdio", enabled: true, timeoutMs: EXEC_TIMEOUT_MS }, also: [[ZCODE_MCP_FEATURE_KEY, true]],
+  },
+  antigravity: {
+    file: [".gemini", "config", ANTIGRAVITY_MCP_FILE], key: ["mcpServers", SERVER_KEY],
+    fields: { tools: ANTIGRAVITY_EAGER_TOOLS },
   },
 });
 
@@ -1142,6 +1156,7 @@ export const NATIVE_INSTALL: Readonly<Record<string, readonly string[]>> = Objec
   vscode: ["npm i -g context-mode", "context-mode setup --agents vscode"],
   kiro: ["npm i -g context-mode", "context-mode setup --agents kiro"],
   zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"],
+  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode"],
 });
 export const ISSUE_FORM_URL = `https://github.com/${ISSUE_REPO_SLUG}/issues/new?template=${ISSUE_FORM_FILE}`; // + &title=&summary=
 export const DOCTOR_GIT_VERSION_TIMEOUT_MS = 5000; // git --version for the report file only

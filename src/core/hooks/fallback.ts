@@ -30,8 +30,10 @@ function firstString(o: Rec, keys: readonly string[]): string {
   return "";
 }
 
-/** The tool input as an object: a JSON string (Copilot toolArgs) is parsed, anything else unreadable gives {}. */
+/** The tool input as an object: a JSON string (Copilot toolArgs) is parsed, Antigravity toolCall.args is unwrapped, anything else unreadable gives {}. */
 function inputOf(o: Rec): Rec {
+  const tc = o.toolCall;
+  if (isRec(tc) && isRec(tc.args)) return tc.args;
   for (const k of HOOK_FAIL_INPUT_KEYS) {
     let v = o[k];
     if (typeof v === "string") {
@@ -40,6 +42,12 @@ function inputOf(o: Rec): Rec {
     if (isRec(v)) return v;
   }
   return {};
+}
+
+function toolNameOf(o: Rec): string {
+  const tc = o.toolCall;
+  if (isRec(tc) && typeof tc.name === "string") return tc.name;
+  return firstString(o, HOOK_FAIL_TOOL_KEYS);
 }
 
 function homeOf(env: NodeJS.ProcessEnv): string {
@@ -153,7 +161,7 @@ function bigFile(abs: string): boolean {
 
 /** True when the Read target is a whole file over the output cap. An unreadable, unnamed or ranged target is not denied. */
 function bigRead(agent: AgentId, input: Rec, cwd: string): boolean {
-  if ((input.offset ?? null) !== null || (input.limit ?? null) !== null) return false; // a ranged Read is never denied (same as decide)
+  if ((input.offset ?? null) !== null || (input.limit ?? null) !== null || (input.StartLine ?? null) !== null || (input.EndLine ?? null) !== null) return false; // a ranged Read is never denied (same as decide)
   const many = Array.isArray(input[READ_PATH_LIST_KEY]) ? (input[READ_PATH_LIST_KEY] as unknown[]).filter((x): x is string => typeof x === "string") : [];
   // D-R47-READ-MEDIA-1: an image or PDF the host shows as a block is not denied (same as decide).
   // D-R48-OWN-FILE-1 (#1326): the agent's own skill and rule files are not denied (same as decide).
@@ -179,7 +187,7 @@ export function failureOutput(agent: AgentId, raw: unknown, err: unknown, cwdFal
   try {
     if (!isRec(raw)) return allowOutput(agent);
     if (!isPreTool(row, firstString(raw, HOOK_FAIL_EVENT_KEYS))) return allowOutput(agent);
-    const name = firstString(raw, HOOK_FAIL_TOOL_KEYS);
+    const name = toolNameOf(raw);
     if (name === "" || name.includes(OWN_TOOL_PREFIX)) return allowOutput(agent);
     const kind = kindOf(row, name);
     if (kind === null) return allowOutput(agent);

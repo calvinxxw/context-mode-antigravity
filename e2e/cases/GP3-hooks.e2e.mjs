@@ -72,9 +72,9 @@ import { DatabaseSync } from "node:sqlite";
   // impl/10 §1.5 "Timeout key" column; value divisor gives seconds.
   const TIMEOUT_UNIT = {
     "claude-code": ["timeout", 1], codex: ["timeout", 1], gemini: ["timeout", MS_PER_S], qwen: ["timeout", 1],
-    "copilot-cli": ["timeoutSec", 1], vscode: ["timeout", 1], kiro: ["timeout", 1], zcode: ["timeoutMs", MS_PER_S],
+    "copilot-cli": ["timeoutSec", 1], vscode: ["timeout", 1], kiro: ["timeout", 1], zcode: ["timeoutMs", MS_PER_S], antigravity: ["timeout", 1],
   };
-  const REGEX_MATCHER_AGENTS = ["claude-code", "codex", "qwen", "zcode"];
+  const REGEX_MATCHER_AGENTS = ["claude-code", "codex", "qwen", "zcode", "antigravity"];
 
   function isObj(v) {
     return v !== null && typeof v === "object" && !Array.isArray(v);
@@ -94,6 +94,21 @@ import { DatabaseSync } from "node:sqlite";
       for (const h of doc.hooks) {
         assert.ok(isCommand(h.action), `${id}: action`);
         out.push({ event: h.trigger, entry: { ...h.action, timeout: h.timeout }, matcher: h.matcher });
+      }
+    } else if (id === "antigravity") {
+      assert.deepEqual(keysOf(doc), ["context-mode"], id);
+      assert.equal(doc["context-mode"].enabled, true, id);
+      for (const [event, items] of Object.entries(doc["context-mode"])) {
+        if (event === "enabled") continue;
+        for (const item of items) {
+          if (event === "PreToolUse" || event === "PostToolUse") {
+            assert.ok(Array.isArray(item.hooks), `${id} ${event}: nested hooks array`);
+            for (const e of item.hooks) out.push({ event, entry: e, matcher: item.matcher });
+          } else {
+            assert.ok(!("hooks" in item) && !("matcher" in item), `${id} ${event}: flat handler array`);
+            out.push({ event, entry: item, matcher: undefined });
+          }
+        }
       }
     } else if (id === "zcode") {
       assert.deepEqual(keysOf(doc), ["hooks"], id);

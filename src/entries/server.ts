@@ -9,7 +9,7 @@ import { McpServer, type ServerContext, type StandardSchemaWithJSON } from "@mod
 import { serveStdio, type StdioServerHandle } from "@modelcontextprotocol/server/stdio";
 import { AGENT_IDS, type AgentId } from "../core/contracts/agents.ts";
 import {
-  HOST_SESSION_ENV, HOST_SESSION_META, INTERNAL_ERROR_LINE, NODE_MIN, OWNER_STOP_EXT, OWNERS_DIR_NAME, PROJECTS_DIR_NAME, RUN_SESSION_PREFIX, SERVER_KEY, TOOLS_TTL_MS,
+  ANTIGRAVITY_PLUGIN_ROOT_ENV, HOST_SESSION_ENV, HOST_SESSION_META, INTERNAL_ERROR_LINE, NODE_MIN, OWNER_STOP_EXT, OWNERS_DIR_NAME, PROJECTS_DIR_NAME, RUN_SESSION_PREFIX, SERVER_KEY, TOOLS_TTL_MS,
   UPGRADE_STOP_DELAY_MS, DOCTOR_TOOL_NAME, JOURNAL_SKIPPED_LINE, ROOTS_TIMEOUT_MS, VSCODE_WORKSPACE_VAR, WORKSPACE_FOLDER_FLAG,
 } from "../core/contracts/constants.ts";
 import { CtxError } from "../core/contracts/errors.ts";
@@ -149,10 +149,12 @@ async function workspaceFromRoots(server: McpServer): Promise<string | undefined
 }
 
 /** The dir the project is resolved from: the host's workspace when it sent one, else the spawn cwd, never the dir this
- *  bundle runs from (that is the plugin cache dir, not a project): "" then, and resolveProject throws NO_PROJECT. */
-export function workspaceCwdOf(meta: Record<string, unknown> | undefined, spawnCwd: string, script: string | undefined): string {
+ *  bundle runs from or PLUGIN_ROOT (that is the plugin install/cache dir, not a project): "" then, and resolveProject throws NO_PROJECT. */
+export function workspaceCwdOf(meta: Record<string, unknown> | undefined, spawnCwd: string, script: string | undefined, env?: NodeJS.ProcessEnv): string {
   const fromHost = workspaceFromMeta(meta);
   if (fromHost !== undefined) return fromHost;
+  const pluginRoot = env?.[ANTIGRAVITY_PLUGIN_ROOT_ENV];
+  if (pluginRoot !== undefined && pluginRoot !== "" && realOrSame(spawnCwd) === realOrSame(pluginRoot)) return "";
   if (script === undefined || script === "") return spawnCwd;
   return realOrSame(spawnCwd) === realOrSame(dirname(script)) ? "" : spawnCwd;
 }
@@ -235,13 +237,19 @@ export async function startServer(argv: string[], env: NodeJS.ProcessEnv): Promi
       const agent = resolveAgent(argv, env);
       // D-VSCODE-ROOTS-1: VS Code (user mcp.json, spawn cwd HOME) names the workspace only in roots/list. Asked on
       // each call, so a folder the user opens later is the project of the next call.
-      const fromRoots = agent === "vscode" && !hasWorkspaceFolder(argv) ? await workspaceFromRoots(server) : undefined;
-      const callArgv = fromRoots === undefined ? argv : [...argv, WORKSPACE_FOLDER_FLAG, fromRoots];
+      // Antigravity plugins may also spawn the MCP server with cwd = PLUGIN_ROOT; ask roots/list when supported.
+      const fromRoots = (agent === "vscode" && !hasWorkspaceFolder(argv)) || agent === "antigravity"
+        ? await workspaceFromRoots(server)
+        : undefined;
+      const callArgv = agent === "vscode" && fromRoots !== undefined ? [...argv, WORKSPACE_FOLDER_FLAG, fromRoots] : argv;
+      const callCwd = agent === "antigravity" && fromRoots !== undefined
+        ? fromRoots
+        : workspaceCwdOf(meta, process.cwd(), process.argv[1], env);
       // §5 step 6a, 7a: resolved lazily, at most once per call, never cached across calls.
       let project: ProjectContext | undefined;
       const projectOf = (): ProjectContext => {
         if (agent === undefined) throw new CtxError("NO_PROJECT", { kind: "--agent" });
-        project ??= resolveProject(agent, { env, argv: callArgv, cwd: workspaceCwdOf(meta, process.cwd(), process.argv[1]), piCwd: undefined });
+        project ??= resolveProject(agent, { env, argv: callArgv, cwd: callCwd, piCwd: undefined });
         return project;
       };
       const ctx: ToolContext = {

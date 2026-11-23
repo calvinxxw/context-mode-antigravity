@@ -1,0 +1,173 @@
+{
+  "host": "antigravity",
+  "source": "Google Antigravity (agy 1.5.14 / Antigravity App 2.0 / Antigravity IDE): https://antigravity.google/docs/hooks.md (SessionStart, PreToolUse, PostToolUse, PreInvocation, Stop output contracts).",
+  "output": {
+    "PreToolUse": {
+      "title": "Antigravity PreToolUse reply",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decision"
+      ],
+      "properties": {
+        "decision": {
+          "type": "string",
+          "enum": [
+            "allow",
+            "auto_approve",
+            "deny",
+            "ask",
+            "force_ask",
+            "deny_unless_prior_grant"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        },
+        "overwrite": {
+          "type": "object"
+        },
+        "permissionOverrides": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "PostToolUse": {
+      "title": "Antigravity PostToolUse reply",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {}
+    },
+    "SessionStart": {
+      "title": "Antigravity SessionStart reply",
+      "definitions": {
+        "InjectStep": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "systemMessage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "systemMessage"
+              ],
+              "properties": {
+                "systemMessage": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object"
+                }
+              }
+            },
+            "userMessage": {
+              "type": "string"
+            },
+            "ephemeralMessage": {
+              "type": "string"
+            },
+            "errorMessage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "userMessage"
+              ],
+              "properties": {
+                "userMessage": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "injectSteps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InjectStep"
+          }
+        }
+      }
+    },
+    "UserPromptSubmit": {
+      "title": "Antigravity PreInvocation reply",
+      "definitions": {
+        "InjectStep": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "systemMessage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "systemMessage"
+              ],
+              "properties": {
+                "systemMessage": {
+                  "type": "string"
+                },
+                "metadata": {
+                  "type": "object"
+                }
+              }
+            },
+            "userMessage": {
+              "type": "string"
+            },
+            "ephemeralMessage": {
+              "type": "string"
+            },
+            "errorMessage": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "userMessage"
+              ],
+              "properties": {
+                "userMessage": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      },
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "injectSteps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/InjectStep"
+          }
+        },
+        "terminationBehavior": {
+          "type": "string",
+          "enum": [
+            "",
+            "terminate"
+          ]
+        }
+      }
+    },
+    "Stop": {
+      "title": "Antigravity Stop reply",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "type": "string"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

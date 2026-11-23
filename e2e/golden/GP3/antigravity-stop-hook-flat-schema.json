@@ -48,5 +48,11 @@
     "PreToolUse",
     "SessionStart",
     "UserPromptSubmit"
+  ],
+  "antigravity": [
+    "PostToolUse",
+    "PreInvocation",
+    "PreToolUse",
+    "SessionStart"
   ]
 }

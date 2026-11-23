@@ -18,6 +18,7 @@ import * as kiro from "../src/adapters/kiro.ts";
 import * as zcode from "../src/adapters/zcode.ts";
 import * as pi from "../src/adapters/pi.ts";
 import * as opencode from "../src/adapters/opencode.ts";
+import * as antigravity from "../src/adapters/antigravity.ts";
 import { CLIENT_NAME_TO_PLATFORM } from "../src/core/contracts/client-map.ts";
 import { HOST_SHAPES, replyErrors, shapeErrors } from "../src/core/ops/hook-shape.ts";
 import { spawnSync } from "node:child_process";
@@ -56,6 +57,7 @@ describe("ADR-0020 adapters", () => {
       pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", 0, "deny-reason"],
       omp: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", 0, "deny-reason"], // ADR-0026 D-OMP-ROW-1
       opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", 0, "deny-reason"],
+      antigravity: ["hooks+mcp", "spawn-cwd", "mcp_context-mode_", "sessionstart", "none", 5000, "deny-reason"],
     };
 
     const CLAUDE_NATIVE = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
@@ -73,6 +75,13 @@ describe("ADR-0020 adapters", () => {
       pi: { shell: ["bash", "powershell"], read: ["read"] }, // D-HA-PI-NAMES-1, D-R38-PI-PWSH-1
       omp: { shell: ["bash", "powershell"], read: ["read"] }, // ADR-0026: Pi tool names
       opencode: { shell: ["bash"], read: ["read"] }, // D-HF-OPENCODE-SHELL-1, D-R44-OC-READ-1
+      antigravity: {
+        shell: ["run_command"],
+        read: ["view_file", "read_file"],
+        grep: ["grep_search"],
+        webfetch: ["read_url_content"],
+        edit: ["write_to_file", "replace_file_content", "multi_replace_file_content", "write_file", "edit_file"],
+      },
     };
 
     const CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
@@ -90,9 +99,10 @@ describe("ADR-0020 adapters", () => {
       omp: { SessionStart: "session_start", UserPromptSubmit: "input", PreToolUse: "tool_call", PostToolUse: "tool_result" },
       // Usage: OpenCode step-finish cost row (DEVIATIONS D-M5-arch-2).
       opencode: { SessionStart: "context", UserPromptSubmit: "prompt", PreToolUse: "execute.before", PostToolUse: "execute.after", PreCompact: "compaction", Usage: "step-finish" },
+      antigravity: { SessionStart: "SessionStart", UserPromptSubmit: "PreInvocation", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" },
     };
 
-    const MODULES = { "claude-code": claudeCode, codex, gemini, qwen, "copilot-cli": copilotCli, vscode, kiro, zcode, pi, opencode };
+    const MODULES = { "claude-code": claudeCode, codex, gemini, qwen, "copilot-cli": copilotCli, vscode, kiro, zcode, pi, opencode, antigravity };
 
     test("ADAPTERS has one row per AgentId, in AGENT_IDS order (impl/10 §1.2, §1.3)", () => {
       assert.deepEqual(ADAPTERS.map((r) => r.id), [...AGENT_IDS]);
@@ -270,6 +280,7 @@ describe("ADR-0020 adapters", () => {
       pi: { kind: "in-process", path: "pi/index.js" },
       omp: { kind: "in-process", path: "omp/index.js" },
       opencode: { kind: "in-process", path: "opencode/plugin.js" },
+      antigravity: { kind: "home-file", path: ".gemini/config/hooks.json" },
     };
     const SKILL_CHANNEL = {
       "claude-code": { kind: "package", path: "skills" }, // D-R33-CC-SKILLS-1: shared with gemini and qwen
@@ -283,6 +294,7 @@ describe("ADR-0020 adapters", () => {
       pi: { kind: "package", path: "pi/skills" },
       omp: { kind: "package", path: "skills" }, // D-OMP-SKILLS-1
       opencode: { kind: "home-dir", path: ".config/opencode/skills" },
+      antigravity: { kind: "home-dir", path: ".gemini/config/skills" },
     };
 
     test("every row has a hookChannel and a skillChannel with a non-empty path (ADR-0020, no exception rows)", () => {
@@ -341,6 +353,7 @@ describe("ADR-0020 adapters", () => {
         pi: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", "deny-reason"],
         omp: ["in-process", "pi:ctx.cwd", "", "pi-flag", "none", "deny-reason"],
         opencode: ["in-process", "spawn-cwd", "", "opencode-cache", "none", "deny-reason"],
+        antigravity: ["hooks+mcp", "spawn-cwd", "mcp_context-mode_", "sessionstart", "none", "deny-reason"],
       };
       for (const r of ADAPTERS) {
         assert.deepEqual(
@@ -2010,6 +2023,119 @@ describe("ADR-0020 adapters", () => {
 
     test("encode replace is a no-op on ZCode (no replace field documented)", () => {
       assert.deepEqual(encode({ ...pre, event: "PostToolUse" }, { kind: "replace", output: "x" }), { stdout: "", exitCode: 0 });
+    });
+  });
+
+  describe("ADR-0020 antigravity adapter", () => {
+    const { decode, encode } = antigravity;
+    const base = { conversationId: "agy-conv-1", cwd: "/tmp/proj", stepIdx: 2 };
+
+    test("client-map maps Antigravity client names to antigravity", () => {
+      for (const n of ["antigravity", "antigravity-client", "antigravity-cli", "agy"]) {
+        assert.equal(CLIENT_NAME_TO_PLATFORM[n], "antigravity", n);
+      }
+    });
+
+    test("decode maps SessionStart, PreInvocation, PreToolUse, PostToolUse and Stop", () => {
+      const ss = decode({ ...base, hookEventName: "SessionStart" });
+      assert.deepEqual(ss, { event: "SessionStart", agent: "antigravity", sessionId: "agy-conv-1", cwd: "/tmp/proj", turn: 2, source: "startup" });
+
+      const preInv = decode({ ...base, hookEventName: "PreInvocation", lastUserInput: "check logs", invocationNum: 3 });
+      assert.deepEqual(preInv, { event: "UserPromptSubmit", agent: "antigravity", sessionId: "agy-conv-1", cwd: "/tmp/proj", prompt: "check logs", turn: 3 });
+
+      const stop = decode({ ...base, hookEventName: "Stop" });
+      assert.equal(stop.event, "Stop");
+      assert.equal(decode({ ...base, hookEventName: "PostInvocation" }).event, "Stop");
+
+      const wsOnly = decode({ hookEventName: "SessionStart", conversationId: "c2", workspacePaths: ["/tmp/ws"] });
+      assert.equal(wsOnly.cwd, "/tmp/ws");
+    });
+
+    test("decode normalizes Antigravity native tools and PascalCase arguments", () => {
+      const sh = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "t1", name: "run_command", args: { CommandLine: "curl https://example.com" } } });
+      assert.deepEqual(sh.tool, { name: "run_command", canonicalName: "Bash", input: { CommandLine: "curl https://example.com", command: "curl https://example.com" }, callId: "t1" });
+
+      const vf = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "t2", name: "view_file", args: { AbsolutePath: "/tmp/proj/big.log", StartLine: 10, EndLine: 50 } } });
+      assert.equal(vf.tool.canonicalName, "Read");
+      assert.equal(vf.tool.input.file_path, "/tmp/proj/big.log");
+      assert.equal(vf.tool.input.offset, 10);
+      assert.equal(vf.tool.input.limit, 50);
+
+      const rf = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "t3", name: "read_file", args: { Path: "/tmp/proj/a.ts" } } });
+      assert.equal(rf.tool.canonicalName, "Read");
+      assert.equal(rf.tool.input.file_path, "/tmp/proj/a.ts");
+
+      const grep = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "t4", name: "grep_search", args: { Query: "foo", SearchPath: "/tmp/proj/src" } } });
+      assert.equal(grep.tool.canonicalName, "Grep");
+      assert.equal(grep.tool.input.pattern, "foo");
+      assert.equal(grep.tool.input.path, "/tmp/proj/src");
+
+      const wf = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "t5", name: "read_url_content", args: { Url: "https://example.com/docs" } } });
+      assert.equal(wf.tool.canonicalName, "WebFetch");
+      assert.equal(wf.tool.input.url, "https://example.com/docs");
+
+      for (const writeName of ["write_to_file", "write_file"]) {
+        const wr = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "t6", name: writeName, args: { TargetFile: "/tmp/proj/x.ts" } } });
+        assert.equal(wr.tool.canonicalName, "Write", writeName);
+        assert.equal(wr.tool.input.file_path, "/tmp/proj/x.ts", writeName);
+      }
+      for (const editName of ["replace_file_content", "multi_replace_file_content", "edit_file"]) {
+        const ed = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "t7", name: editName, args: { TargetFile: "/tmp/proj/x.ts" } } });
+        assert.equal(ed.tool.canonicalName, "Edit", editName);
+        assert.equal(ed.tool.input.file_path, "/tmp/proj/x.ts", editName);
+      }
+    });
+
+    test("decode unwraps call_mcp_tool for context-mode and strips both global and plugin MCP prefixes", () => {
+      const lazyGlobal = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "c1", name: "call_mcp_tool", args: { ServerName: "context-mode", ToolName: "ctx_execute", Arguments: { language: "shell", code: "ls" } } } });
+      assert.equal(lazyGlobal.tool.canonicalName, "ctx_execute");
+      assert.equal(lazyGlobal.tool.input.language, "shell");
+      assert.equal(lazyGlobal.tool.input.code, "ls");
+
+      const lazyPlugin = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "c2", name: "call_mcp_tool", args: { ServerName: "context-mode_context-mode", ToolName: "ctx_search", Arguments: { queries: ["x"] } } } });
+      assert.equal(lazyPlugin.tool.canonicalName, "ctx_search");
+
+      const lazyForeign = decode({ ...base, hookEventName: "PreToolUse", toolCall: { id: "c3", name: "call_mcp_tool", args: { ServerName: "github", ToolName: "list_issues", Arguments: {} } } });
+      assert.equal(lazyForeign.tool.canonicalName, "mcp:github:list_issues");
+
+      assert.equal(decode({ ...base, hookEventName: "PreToolUse", toolCall: { name: "mcp_context-mode_ctx_stats", args: {} } }).tool.canonicalName, "ctx_stats");
+      assert.equal(decode({ ...base, hookEventName: "PreToolUse", toolCall: { name: "mcp_context-mode_context-mode_ctx_index", args: {} } }).tool.canonicalName, "ctx_index");
+      assert.equal(decode({ ...base, hookEventName: "PreToolUse", toolCall: { name: "mcp_other_list_issues", args: {} } }).tool.canonicalName, "mcp:other:list_issues");
+    });
+
+    test("decode PostToolUse records tool errors cleanly", () => {
+      const ok = decode({ ...base, hookEventName: "PostToolUse", toolCall: { id: "t1", name: "run_command", args: { CommandLine: "echo hi" } } });
+      assert.deepEqual(ok.result, { isError: false, bytes: 0, text: "" });
+      const err = decode({ ...base, hookEventName: "PostToolUse", toolCall: { id: "t2", name: "run_command", args: { CommandLine: "false" } }, error: "exit 1" });
+      assert.deepEqual(err.result, { isError: true, bytes: 6, text: "exit 1" });
+    });
+
+    test("encode outputs valid Antigravity JSON for allow, deny, hint and replace", () => {
+      const pre = { event: "PreToolUse", agent: "antigravity", sessionId: "s1", cwd: "/tmp/proj" };
+      const post = { event: "PostToolUse", agent: "antigravity", sessionId: "s1", cwd: "/tmp/proj" };
+      const ss = { event: "SessionStart", agent: "antigravity", sessionId: "s1", cwd: "/tmp/proj" };
+      const preInv = { event: "UserPromptSubmit", agent: "antigravity", sessionId: "s1", cwd: "/tmp/proj" };
+
+      assert.deepEqual(JSON.parse(encode(pre, { kind: "allow" }).stdout), { decision: "allow" });
+      assert.deepEqual(JSON.parse(encode(post, { kind: "allow" }).stdout), {});
+      assert.deepEqual(JSON.parse(encode(ss, { kind: "allow" }).stdout), {});
+
+      const deny = encode(pre, { kind: "deny", reason: "use ctx_execute", rewritten: "node run.mjs" });
+      assert.equal(deny.exitCode, 0);
+      assert.deepEqual(JSON.parse(deny.stdout), { decision: "deny", reason: "node run.mjs\nuse ctx_execute" });
+      assert.deepEqual(replyErrors("antigravity", "PreToolUse", deny.stdout), []);
+
+      const hintSs = encode(ss, { kind: "hint", text: "resume state", onceKey: "k" });
+      assert.deepEqual(JSON.parse(hintSs.stdout), { injectSteps: [{ systemMessage: { systemMessage: "resume state" } }] });
+      assert.deepEqual(replyErrors("antigravity", "SessionStart", hintSs.stdout), []);
+
+      const hintPreInv = encode(preInv, { kind: "hint", text: "recalled", onceKey: "k" });
+      assert.deepEqual(JSON.parse(hintPreInv.stdout), { injectSteps: [{ systemMessage: { systemMessage: "recalled" } }] });
+      assert.deepEqual(replyErrors("antigravity", "UserPromptSubmit", hintPreInv.stdout), []);
+
+      // PreToolUse has no injectSteps; allow safely. PostToolUse has no replace channel; return {}.
+      assert.deepEqual(JSON.parse(encode(pre, { kind: "hint", text: "ignored", onceKey: "k" }).stdout), { decision: "allow" });
+      assert.deepEqual(JSON.parse(encode(post, { kind: "replace", output: "short" }).stdout), {});
     });
   });
 

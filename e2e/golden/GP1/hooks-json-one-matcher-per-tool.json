@@ -11,5 +11,8 @@
   ],
   "zcode": [
     "^(Bash|Read|Grep|WebFetch|Write|Edit|NotebookEdit|mcp__context-mode__ctx_.*)$"
+  ],
+  "antigravity": [
+    "^(run_command|view_file|read_file|grep_search|read_url_content|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file|mcp_context-mode_ctx_.*)$"
   ]
 }

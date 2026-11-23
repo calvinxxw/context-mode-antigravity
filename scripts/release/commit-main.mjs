@@ -17,7 +17,7 @@ import { setVersions } from "./dev-version.mjs";
 const MAIN_BRANCH = "main";
 const TAG_PREFIX = "v";
 const PUSH_TRIES = 3;
-const GENERATED = Object.freeze(["plugins", ".claude-plugin", ".agents", "gemini-extension.json", "hooks", "qwen-extension.json", "package.json"]);
+const GENERATED = Object.freeze(["plugins", ".antigravity-plugin", ".claude-plugin", ".agents", "gemini-extension.json", "hooks", "hooks.json", "mcp_config.json", "qwen-extension.json", "package.json"]);
 const BOT = Object.freeze(["-c", "user.name=github-actions[bot]", "-c", "user.email=41898282+github-actions[bot]@users.noreply.github.com", "-c", "commit.gpgsign=false", "-c", "tag.gpgsign=false"]);
 const MAIN_TREE = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "..", "build", "main-tree.mjs");
 const VALUE_FLAGS = Object.freeze(["--pkg", "--version", "--remote", "--rollback-to", "--before-push"]);

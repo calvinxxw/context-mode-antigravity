@@ -1,0 +1,43 @@
+{
+  "context-mode": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "node ./hook.mjs --agent antigravity",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "^(run_command|view_file|read_file|grep_search|read_url_content|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file|mcp_context-mode_context-mode_ctx_.*)$"
+      }
+    ],
+    "PreInvocation": [
+      {
+        "command": "node ./hook.mjs --agent antigravity",
+        "timeout": 5,
+        "type": "command"
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "command": "node ./hook.mjs --agent antigravity",
+            "timeout": 5,
+            "type": "command"
+          }
+        ],
+        "matcher": "^(run_command|view_file|read_file|grep_search|read_url_content|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file|mcp_context-mode_context-mode_ctx_.*)$"
+      }
+    ],
+    "SessionStart": [
+      {
+        "command": "node ./hook.mjs --agent antigravity",
+        "timeout": 5,
+        "type": "command"
+      }
+    ],
+    "enabled": true
+  }
+}

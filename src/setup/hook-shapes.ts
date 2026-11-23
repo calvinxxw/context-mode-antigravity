@@ -61,6 +61,16 @@ function zcodeShape(row: AdapterRow, cmd: string): JsonObject {
   return { hooks: { enabled: true, events: byEvent } };
 }
 
+// {<hookName>:{enabled:true,SessionStart:[{type,command,timeout}],PreInvocation:[...],PreToolUse:[{matcher,hooks:[...]}],PostToolUse:[{matcher,hooks:[...]}]}} — Antigravity.
+function antigravityShape(row: AdapterRow, cmd: string): JsonObject {
+  const group: JsonObject = { enabled: true };
+  const handler: JsonObject = { ...entry(cmd), timeout: seconds(row) };
+  for (const [canonical, native] of events(row)) {
+    group[native] = isToolEvent(canonical) ? [{ matcher: composeMatcher(row, canonical), hooks: [handler] }] : [handler];
+  }
+  return { [SERVER_KEY]: group };
+}
+
 export const HOOK_SHAPES: Readonly<Record<AgentId, ((row: AdapterRow, cmd: string) => JsonObject) | null>> = {
   "claude-code": (row, cmd) => nestedShape(row, cmd, seconds(row), true),
   codex: (row, cmd) => nestedShape(row, cmd, seconds(row), true),
@@ -73,4 +83,5 @@ export const HOOK_SHAPES: Readonly<Record<AgentId, ((row: AdapterRow, cmd: strin
   pi: null,
   opencode: null,
   omp: null, // ADR-0026: in-process like pi
+  antigravity: antigravityShape,
 };

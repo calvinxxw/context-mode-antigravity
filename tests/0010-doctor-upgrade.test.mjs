@@ -548,91 +548,104 @@ describe("ADR-0010 doctor D3, D4, D5b: host config, double fire, v1 leftovers", 
   });
 });
 
-describe("ADR-0010 doctor D3 on Antigravity: one clear line, no Gemini CLI claims (D-1340-AGY-D3-1)", { concurrency: CONC }, () => {
-  // #1340 (nahiarhd, filed by an Antigravity agent): "D3 host config FAIL: wrong: MCP entry, hook entries", fix
-  // "context-mode setup --agents gemini", bundle ~/.gemini/config/plugins/context-mode/server, D5 D6 D8 PASS.
+describe("ADR-0010 doctor D3 and D1 on native Antigravity", { concurrency: CONC }, () => {
   const KEY = "e".repeat(16);
   function tmp(t) {
     const dir = realpathSync(mkdtempSync(path.join(tmpdir(), "cm-doctor-agy-")));
     t.after(() => rmSync(dir, { recursive: true, force: true }));
     return dir;
   }
-  function rows(home, clientName, bundleDir) {
-    const projectDir = path.join(home, ".context-mode", "projects", KEY);
-    const ctx = {
-      project: { projectKey: KEY, projectDir, dbPath: path.join(projectDir, "context.db"), worktree: home, containmentRoot: home, agent: "gemini", source: getAdapter("gemini").projectSource },
-      sessionId: "s1", turn: 1, signal: new AbortController().signal, protocolVersion: "2025-06-18",
-      ...(clientName === undefined ? {} : { clientInfo: { name: clientName, version: "1.0.0" } }),
-    };
-    const host = { env: { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "" }, bundleDir: bundleDir ?? path.join(home, "no-bundle"), piCwd: undefined };
-    return runDoctorChecks(ctx, getAdapter("gemini"), host);
-  }
-  const run = (home, clientName, bundleDir) => rows(home, clientName, bundleDir).then((rs) => rs.find((r) => r.id === "D3"));
-
-  test("[D-1340-AGY-D3-1] the reporter's layout (plugin under ~/.gemini/config/plugins/context-mode) gets the Antigravity line, not wrong entries", async (t) => {
-    const home = tmp(t);
-    const d3 = await run(home, undefined, path.join(home, ".gemini", "config", "plugins", "context-mode", "server"));
-    assert.notEqual(d3.status, "FAIL", d3.detail);
-    assert.equal(d3.detail.includes("wrong:"), false, d3.detail);
-    assert.ok(d3.detail.includes("Antigravity is not a supported host today"), d3.detail);
-    assert.ok(d3.detail.includes("docs/install/README.md"), d3.detail);
-    assert.equal(String(d3.fixCommand ?? "").includes("gemini extensions install"), false);
-    assert.equal(String(d3.fixCommand ?? "").includes("setup --agents gemini"), false);
-  });
-
-  for (const name of ["antigravity-cli", "antigravity-client", "agy", "Antigravity"]) {
-    test(`[D-1340-AGY-D3-1] clientInfo.name ${name} gets the Antigravity line`, async (t) => {
-      const home = tmp(t);
-      const d3 = await run(home, name);
-      assert.notEqual(d3.status, "FAIL", d3.detail);
-      assert.ok(d3.detail.includes("Antigravity is not a supported host today"), d3.detail);
-      assert.ok(d3.detail.includes("The MCP server runs"), d3.detail);
-      assert.ok(d3.detail.includes("hooks are not checked"), d3.detail);
-    });
+  function put(file, text) {
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, text, "utf8");
   }
 
-  test("[D-1340-AGY-D1-1] D1 in Antigravity never names the Gemini update command", () => {
+  test("antigravity is a first-class supported host (removed from UNSUPPORTED_HOSTS)", () => {
+    for (const name of ["antigravity", "antigravity-cli", "antigravity-client", "agy", "Antigravity"]) {
+      assert.equal(unsupportedHostOf({ clientName: name }), undefined, name);
+      assert.equal(unsupportedHostByName(name), undefined, name);
+    }
     const env = { HOME: "/h", USERPROFILE: "/h" };
-    const agy = unsupportedHostOf({ clientName: "antigravity-cli" });
-    assert.ok(agy, "antigravity-cli is a known unsupported host");
-    const fix = d1UpdateCommand("gemini", env, agy);
-    assert.equal(fix.includes("gemini extensions update"), false, fix);
-    assert.ok(fix.includes("Antigravity is not a supported host today"), fix);
-    assert.ok(d1UpdateCommand("gemini", env, undefined).includes("gemini extensions update"), "a real Gemini host keeps its own command");
+    assert.ok(d1UpdateCommand("antigravity", env, undefined).includes("agy plugin"), "D1 gives the Antigravity update command");
   });
 
-  test("[D-1340-AGY-D3-1] the CLI plugin dir ~/.gemini/antigravity-cli/plugins is Antigravity too", async (t) => {
+  test("doctor-config/D3 antigravity: native plugin under ~/.gemini/config/plugins/context-mode passes D3", (t) => {
     const home = tmp(t);
-    const d3 = await run(home, undefined, path.join(home, ".gemini", "antigravity-cli", "plugins", "context-mode", "server"));
-    assert.ok(d3.detail.includes("Antigravity is not a supported host today"), d3.detail);
+    const pluginDir = path.join(home, ".gemini", "config", "plugins", "context-mode");
+    const row = getAdapter("antigravity");
+    put(path.join(pluginDir, "mcp_config.json"), JSON.stringify({
+      mcpServers: { "context-mode": { command: "node", args: ["${PLUGIN_ROOT}/server.mjs", "--agent", "antigravity"] } },
+    }));
+    const matcher = composeMatcher(row, "PreToolUse").replace("mcp_context-mode_ctx_.*", "mcp_context-mode_context-mode_ctx_.*");
+    put(path.join(pluginDir, "hooks.json"), JSON.stringify({
+      "context-mode": {
+        enabled: true,
+        SessionStart: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }],
+        PreInvocation: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }],
+        PreToolUse: [{ matcher, hooks: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }] }],
+        PostToolUse: [{ matcher, hooks: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }] }],
+      },
+    }));
+    const d3 = checkHostConfig(row, { HOME: home, USERPROFILE: home }, home);
+    assert.equal(d3.status, "PASS", d3.detail);
+
+    // Disabled in ~/.gemini/config/config.json -> FAIL
+    put(path.join(home, ".gemini", "config", "config.json"), JSON.stringify({ plugins: { "context-mode": { enabled: false } } }));
+    const disabled = checkHostConfig(row, { HOME: home, USERPROFILE: home }, home);
+    assert.equal(disabled.status, "FAIL", disabled.detail);
   });
 
-  test("[D-1340-AGY-D3-1] Gemini CLI itself (clientInfo gemini-cli-mcp-client, extension dir) keeps the real D3 verdict", async (t) => {
+  test("doctor-config/D3 antigravity: global ~/.gemini/config/{mcp_config,hooks}.json passes D3", (t) => {
     const home = tmp(t);
-    const d3 = await run(home, "gemini-cli-mcp-client", path.join(home, ".gemini", "extensions", "context-mode", "server"));
-    assert.equal(d3.status, "FAIL");
-    assert.ok(d3.detail.startsWith("wrong:"), d3.detail);
+    const cfg = path.join(home, ".gemini", "config");
+    const row = getAdapter("antigravity");
+    put(path.join(cfg, "mcp_config.json"), JSON.stringify({
+      mcpServers: { "context-mode": { command: "node", args: [path.join(ownBundleDir(), "server.mjs"), "--agent", "antigravity"], tools: C.ANTIGRAVITY_EAGER_TOOLS } },
+    }));
+    const matcher = composeMatcher(row, "PreToolUse");
+    put(path.join(cfg, "hooks.json"), JSON.stringify({
+      "context-mode": {
+        enabled: true,
+        SessionStart: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }],
+        PreInvocation: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }],
+        PreToolUse: [{ matcher, hooks: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }] }],
+        PostToolUse: [{ matcher, hooks: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }] }],
+      },
+    }));
+    const d3 = checkHostConfig(row, { HOME: home, USERPROFILE: home }, home);
+    assert.equal(d3.status, "PASS", d3.detail);
   });
 });
 
-describe("ADR-0014 §1 ctx_doctor answers when the project does not resolve (#1410)", { concurrency: CONC }, () => {
-  // #1410 (calvinxxw, agy 1.5.14): agy stages the Gemini CLI manifest under ~/.gemini/config/plugins/context-mode and
-  // starts `node server.mjs --agent gemini` with cwd = that plugin dir. The server never takes its own dir as the project
-  // (D-C166-NATIVE-CWD-1), so every tool says "Project source spawn-cwd is missing. Fix: run ctx_doctor." ctx_doctor
-  // returned the same error, a loop. ADR-0014 §1: ctx_doctor always answers, even in a degraded start.
+describe("ADR-0014 §1 ctx_doctor answers when the project does not resolve, and Antigravity resolves via MCP roots (#1410)", { concurrency: CONC }, () => {
+  // #1410 (calvinxxw, agy 1.5.14): agy starts the plugin MCP server with cwd = plugin dir and PLUGIN_ROOT = plugin dir.
+  // With native Antigravity support, server.ts rejects PLUGIN_ROOT as a project dir and resolves the real workspace via
+  // MCP roots/list when the client supports roots; if no roots are sent, ctx_doctor still answers in degraded start.
   const REPO = path.resolve(import.meta.dirname, "..");
   let home;
   let bundleDir;
+  let workspaceDir;
   before(async () => {
     home = realpathSync(mkdtempSync(path.join(tmpdir(), "cm-doctor-1410-")));
     bundleDir = path.join(home, ".gemini", "config", "plugins", "context-mode");
+    workspaceDir = path.join(home, "real-project");
+    mkdirSync(workspaceDir, { recursive: true });
     await promisify(execFile)(process.execPath, [path.join(REPO, "build", "build.mjs"), "--out", bundleDir], { encoding: "utf8" });
   });
   after(() => rmSync(home, { recursive: true, force: true }));
-  async function call(agent, clientName, name) {
-    const client = spawnBundle(path.join(bundleDir, "server.mjs"), { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "" }, ["--agent", agent], { cwd: bundleDir });
+  async function call(agent, clientName, name, { withRoots = false } = {}) {
+    const env = { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", ...(agent === "antigravity" ? { PLUGIN_ROOT: bundleDir } : {}) };
+    const opts = {
+      cwd: bundleDir,
+      ...(withRoots ? { onRequest: (method) => (method === "roots/list" ? { roots: [{ uri: pathToFileURL(workspaceDir).href }] } : undefined) } : {}),
+    };
+    const client = spawnBundle(path.join(bundleDir, "server.mjs"), env, ["--agent", agent], opts);
     try {
-      await client.request("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: clientName, version: "1.5.14" } });
+      await client.request("initialize", {
+        protocolVersion: "2025-06-18",
+        capabilities: withRoots ? { roots: {} } : {},
+        clientInfo: { name: clientName, version: "1.5.14" },
+      });
       client.notify("notifications/initialized", {});
       const r = await client.request("tools/call", { name, arguments: {} });
       return { isError: r.isError === true, text: r.content.map((c) => c.text).join("") };
@@ -641,23 +654,27 @@ describe("ADR-0014 §1 ctx_doctor answers when the project does not resolve (#14
     }
   }
 
-  test("[D-1410-DOCTOR-NO-PROJECT-1] Antigravity (clientInfo antigravity-cli, spawn cwd = plugin dir): ctx_doctor returns its table with the unsupported-host line", async () => {
-    const r = await call("gemini", "antigravity-cli", "ctx_doctor");
-    assert.equal(r.isError, false, r.text);
-    assert.ok(r.text.includes("Antigravity is not a supported host today"), r.text);
-    assert.ok(r.text.includes("Project source spawn-cwd is missing"), r.text); // D7 names why the project did not resolve
+  test("[D-1410-DOCTOR-NO-PROJECT-1] Antigravity spawned in PLUGIN_ROOT with MCP roots/list resolves the real workspace", async () => {
+    const doc = await call("antigravity", "antigravity-cli", "ctx_doctor", { withRoots: true });
+    assert.equal(doc.isError, false, doc.text);
+    assert.equal(doc.text.includes("Project source spawn-cwd is missing"), false, doc.text);
+    const stats = await call("antigravity", "antigravity-cli", "ctx_stats", { withRoots: true });
+    assert.equal(stats.isError, false, stats.text);
+  });
+
+  test("[D-1410-DOCTOR-NO-PROJECT-1] Antigravity spawned in PLUGIN_ROOT without roots: ctx_doctor answers cleanly, work tools return NO_PROJECT", async () => {
+    const doc = await call("antigravity", "antigravity-cli", "ctx_doctor");
+    assert.equal(doc.isError, false, doc.text);
+    assert.ok(doc.text.includes("Project source spawn-cwd is missing"), doc.text);
+    const stats = await call("antigravity", "antigravity-cli", "ctx_stats");
+    assert.equal(stats.isError, true, stats.text);
+    assert.ok(stats.text.includes("Project source spawn-cwd is missing. Fix: run ctx_doctor."), stats.text);
   });
 
   test("[D-1410-DOCTOR-NO-PROJECT-1] codex started in its plugin dir with no _meta workspace: ctx_doctor still answers", async () => {
     const r = await call("codex", "codex-mcp-client", "ctx_doctor");
     assert.equal(r.isError, false, r.text);
     assert.ok(r.text.includes("Project source arg:--agent+cwd is missing"), r.text);
-  });
-
-  test("[D-1410-DOCTOR-NO-PROJECT-1] the work tools keep the NO_PROJECT line and point to ctx_doctor", async () => {
-    const r = await call("gemini", "antigravity-cli", "ctx_stats");
-    assert.equal(r.isError, true, r.text);
-    assert.ok(r.text.includes("Project source spawn-cwd is missing. Fix: run ctx_doctor."), r.text);
   });
 });
 
@@ -692,11 +709,11 @@ describe("ADR-0010 doctor on every unsupported host: one clear line, no false FA
       assert.equal(r.fixCommand, undefined);
     }
   }
-  const AGENT_LIST = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp"].join(", ");
+  const AGENT_LIST = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "antigravity"].join(", ");
 
   test("[D-UNSUPPORTED-HOSTS-1] the list holds the removed 2.0 hosts, each with a source line", () => {
     const ids = C.UNSUPPORTED_HOSTS.map((h) => h.id).sort();
-    assert.deepEqual(ids, ["antigravity", "cursor", "jetbrains-copilot", "kilo", "kimi", "openclaw", "zed"]); // ADR-0026 T20: omp is supported (D-OMP-ROW-1)
+    assert.deepEqual(ids, ["cursor", "jetbrains-copilot", "kilo", "kimi", "openclaw", "zed"]); // omp & antigravity are natively supported
     for (const h of C.UNSUPPORTED_HOSTS) assert.ok(h.source.includes(":"), h.id);
   });
 
@@ -729,7 +746,7 @@ describe("ADR-0010 doctor on every unsupported host: one clear line, no false FA
     const rs = await rows(home, "claude-code", { clientName: "claude-code", env: { CURSOR_TRACE_ID: "x", ZED_TERM: "true", KILO: "1" } });
     assert.equal(rs.find((x) => x.id === "D3").status, "FAIL");
     assert.equal(unsupportedHostOf({ clientName: "gemini-cli-mcp-client" }), undefined);
-    for (const id of ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "omp-coding-agent"]) assert.equal(unsupportedHostByName(id), undefined, id); // ADR-0026 T20
+    for (const id of ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "omp-coding-agent", "antigravity", "antigravity-cli", "agy"]) assert.equal(unsupportedHostByName(id), undefined, id);
   });
 
   test("[D-UNSUPPORTED-HOSTS-1] an in-process host (Pi, OpenCode, OMP) is the host: a foreign env var from the terminal never marks it unsupported", async (t) => {
@@ -1874,7 +1891,7 @@ describe("ADR-0010 doctor D5: hook round trip", { concurrency: CONC }, () => {
           });
           assert.equal(r.status, 0, host + " " + r.stderr);
           assert.ok(!r.stderr.includes("decode failed"), host + " " + r.stderr);
-          assert.equal(r.stdout, "", host + " expected allow, got " + r.stdout);
+          assert.equal(r.stdout, host === "antigravity" ? '{"decision":"allow"}' : "", host + " expected allow, got " + r.stdout);
           const log = path.join(home, ".context-mode", "hook-errors.log");
           assert.equal(existsSync(log) ? readFileSync(log, "utf8") : "", "", host + " logged a hook error");
         } finally {
@@ -2690,7 +2707,7 @@ describe("ADR-0010 doctor: hook-runs check per agent (GP11)", { concurrency: CON
   test("H5: doctor hook-runs PASSES on all 11 hosts with the real hook: the large shell read gets the saving effect", (t) => {
     const s = sandbox(t, REAL_HOOK);
     assert.equal(s.reg.length, ADAPTERS.length);
-    assert.equal(s.reg.length, 11); // ADR-0026: omp is the 11th row
+    assert.equal(s.reg.length, 12); // ADR-0026: omp is the 11th row, antigravity is the 12th
     for (const row of s.reg) {
       const c = hookRunsCheck(row, s.env);
       assert.equal(c.name, "hook-runs", row.id);

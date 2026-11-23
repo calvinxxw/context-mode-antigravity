@@ -161,5 +161,25 @@
       "sessionId": "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
       "cwd": "/tmp/project"
     }
+  },
+  "antigravity": {
+    "event": "PreToolUse",
+    "payload": {
+      "hookEventName": "PreToolUse",
+      "conversationId": "dddddddd-dddd-dddd-dddd-dddddddddddd",
+      "cwd": "/tmp/project",
+      "workspacePaths": [
+        "/tmp/project"
+      ],
+      "stepIdx": 0,
+      "toolCall": {
+        "id": "toolu_dddddddd",
+        "name": "run_command",
+        "args": {
+          "CommandLine": "echo gp3-fixture-probe",
+          "toolSummary": "Echo probe string"
+        }
+      }
+    }
   }
 }

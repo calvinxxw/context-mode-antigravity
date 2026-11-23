@@ -97,7 +97,7 @@ const MAIN_TREE_PLUGIN_DIR = "plugins/claude-code/";
 const MAIN_TREE_SKILL_DIRS = ["skills/", "claude-code/skills/", "codex/skills/", "pi/skills/"];
 const MAIN_TREE_SKILL_FILES = MAIN_TREE_SKILL_DIRS.flatMap((d) =>
   ["ctx-stats", "ctx-doctor", "ctx-upgrade"].map((n) => MAIN_TREE_PLUGIN_DIR + d + n + "/SKILL.md"));
-const MAIN_TREE_FILES = ["gemini-extension.json", "qwen-extension.json", "hooks/hooks.json", "hooks/qwen.json"];
+const MAIN_TREE_FILES = ["gemini-extension.json", "qwen-extension.json", "hooks/hooks.json", "hooks/qwen.json", "hooks.json", "mcp_config.json"];
 const REMOVED_BASENAMES = ["AGENTS.md", "GEMINI.md", "QWEN.md", "CLAUDE.md", "SYSTEM.md", "copilot-instructions.md"];
 
 // The two retired tool names (00-architecture Assumption A3). Scan scope per D-M7-arch-4.
@@ -116,15 +116,15 @@ const ALLOWED_DIRS = [
   "docs/assets/readme/", // README figures and their sources (D-README-THESIS-1)
   "scripts/release/",
   ".github/",
-  ".claude-plugin/", ".codex-plugin/", ".agents/plugins/",
+  ".antigravity-plugin/", ".claude-plugin/", ".codex-plugin/", ".agents/plugins/",
   MAIN_TREE_PLUGIN_DIR,
 ];
 const ALLOWED_FILES = [
-  // The 11 adapter files (impl/00 §1).
+  // The 12 adapter files (impl/00 §1 + antigravity).
   "src/adapters/table.ts",
   "src/adapters/claude-code.ts", "src/adapters/codex.ts", "src/adapters/gemini.ts", "src/adapters/qwen.ts",
   "src/adapters/copilot-cli.ts", "src/adapters/vscode.ts", "src/adapters/kiro.ts", "src/adapters/zcode.ts",
-  "src/adapters/pi.ts", "src/adapters/opencode.ts",
+  "src/adapters/pi.ts", "src/adapters/opencode.ts", "src/adapters/antigravity.ts",
   // The 3 command skills and the release skill (GS5).
   ...ALLOWED_SKILL_FILES,
   ".claude/settings.json",

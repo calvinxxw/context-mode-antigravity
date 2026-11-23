@@ -21,6 +21,7 @@ body:
         - pi
         - opencode
         - omp
+        - antigravity
     validations:
       required: true
   - type: textarea

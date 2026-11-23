@@ -1080,7 +1080,7 @@ describe("ADR-0015 repo: README agent lines", () => {
 
   test("readme-agents: every host row says it has hooks, from its hookChannel in table.ts", () => {
     const rows = agentRows();
-    assert.equal(rows.length, 11); // omp is the 11th (ADR-0026 M8, D-OMP-DOCS-1)
+    assert.equal(rows.length, 12); // omp is the 11th (ADR-0026 M8, D-OMP-DOCS-1), antigravity is the 12th
     for (const r of rows) {
       const a = ADAPTERS.find((x) => x.id === r.id);
       assert.ok(a.hookChannel, `${r.id} has a hookChannel`);
@@ -1466,9 +1466,9 @@ describe("ADR-0015 repo: README thesis, links and figures (D-README-THESIS-1)", 
     assert.ok(!out.includes('"docs'), "OUT_FILES names a docs path");
   });
 
-  test("README line cap is 700 (D-TIC-README-3, was 650 by D-TIC-README-1, 600 by D-README-DWELL-1, 400 before) and its DEVIATIONS row quotes the owner", async () => {
+  test("README line cap is 730 (was 700 by D-TIC-README-3, 650 by D-TIC-README-1, 600 by D-README-DWELL-1, 400 before) and its DEVIATIONS row quotes the owner", async () => {
     const { README_MAX_LINES } = await import("../src/core/contracts/constants.ts");
-    assert.equal(README_MAX_LINES, 700);
+    assert.equal(README_MAX_LINES, 730);
     const rows = readRepo("docs/architecture/modules/DEVIATIONS.md").split("\n").filter((l) => l.includes("(D-README-THESIS-1)")); // the row id; later rows may name it in their text
     assert.equal(rows.length, 1);
     assert.ok(rows[0].includes("akademik bir tez"));

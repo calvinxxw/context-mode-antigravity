@@ -1103,7 +1103,7 @@ describe("[WHO] D-REL-WHO-1 release plan: who gets this release", { concurrency:
   const PLAN = path.join(REPO, "scripts", "release", "plan.mjs");
   const GIT_ID = ["-c", "user.name=t", "-c", "user.email=t@example.invalid", "-c", "commit.gpgsign=false", "-c", "init.defaultBranch=main"];
   const reach = () => import(pathToFileURL(path.join(REPO, "scripts", "release", "reach.mjs")).href);
-  const ALL = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp"];
+  const ALL = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "antigravity"];
 
   test("docs, tests, CI, bench and e2e reach no agent", async () => {
     const { reachOf } = await reach();
@@ -1127,7 +1127,9 @@ describe("[WHO] D-REL-WHO-1 release plan: who gets this release", { concurrency:
     assert.deepEqual(reachOf(["hooks/qwen.json", "qwen-extension.json"]), ["qwen"]);
     assert.deepEqual(reachOf(["hooks/hooks.json"]), ["gemini"]);
     assert.deepEqual(reachOf([".codex-plugin/plugin.json"]), ["codex"]);
-    assert.deepEqual(reachOf(["plugins/claude-code/server.mjs"]), ["claude-code", "codex", "gemini", "qwen", "zcode"]);
+    assert.deepEqual(reachOf([".antigravity-plugin/plugin.json", "mcp_config.json", "hooks.json"]), ["antigravity"]);
+    assert.deepEqual(reachOf(["src/adapters/antigravity.ts"]), ["antigravity"]);
+    assert.deepEqual(reachOf(["plugins/claude-code/server.mjs"]), ["claude-code", "codex", "gemini", "qwen", "zcode", "antigravity"]);
     // codex, qwen, zcode and vscode import the Claude shape from src/adapters/claude-code.ts (#1304 changed it).
     assert.deepEqual(reachOf(["src/adapters/claude-code.ts"]), ["claude-code", "codex", "qwen", "vscode", "zcode"]);
     assert.deepEqual(reachOf(["src/adapters/pi.ts", "src/adapters/gemini.ts", "docs/x.md"]), ["gemini", "pi"]);
@@ -1146,7 +1148,7 @@ describe("[WHO] D-REL-WHO-1 release plan: who gets this release", { concurrency:
       "| Codex | GitHub, npm for the one-time hook trust step | `codex plugin marketplace upgrade context-mode` |",
       "| Pi | npm | `pi update --extensions` |",
       "",
-      "Same version, no code change: Gemini CLI, Qwen Code, Copilot CLI, VS Code (Copilot), Kiro, ZCode, OpenCode, OMP.",
+      "Same version, no code change: Gemini CLI, Qwen Code, Copilot CLI, VS Code (Copilot), Kiro, ZCode, OpenCode, OMP, Antigravity.",
     ].join("\n"));
     assert.ok(!whoGetsTable(ALL).includes("Same version"), "every agent reached: no extra line");
   });

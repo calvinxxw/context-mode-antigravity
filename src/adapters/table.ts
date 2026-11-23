@@ -14,6 +14,7 @@ import * as kiro from "./kiro.ts";
 import * as zcode from "./zcode.ts";
 import * as pi from "./pi.ts";
 import * as opencode from "./opencode.ts";
+import * as antigravity from "./antigravity.ts";
 
 const CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
 const CLAUDE_TOOLS = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
@@ -122,6 +123,22 @@ export const ADAPTERS: readonly AdapterRow[] = Object.freeze([
     hookChannel: { kind: "in-process", path: "omp/index.js" }, skillChannel: { kind: "package", path: "skills" }, // D-OMP-SKILLS-1
     decode: pi.decodeOmp, encode: pi.encode, checkPermission: pi.checkPermission, // D-OMP-FIRE-1: agent omp in rows
   },
+  {
+    // Native Google Antigravity adapter (Antigravity App, Antigravity CLI `agy`, Antigravity IDE).
+    // PostToolUse does not receive tool output, so Antigravity is a deny+redirect host; PreInvocation carries recall.
+    id: "antigravity", installMode: "hooks+mcp", projectSource: "spawn-cwd", toolNamePrefix: antigravity.TOOL_NAME_PREFIX,
+    nativeTools: {
+      shell: [...antigravity.SHELL_TOOL_NAMES],
+      read: [...antigravity.READ_TOOL_NAMES],
+      grep: [...antigravity.GREP_TOOL_NAMES],
+      webfetch: [...antigravity.WEBFETCH_TOOL_NAMES],
+      edit: [...antigravity.EDIT_TOOL_NAMES],
+    },
+    execReadOnlyHint: false, eventMap: antigravity.EVENT_MAP,
+    compactDelivery: "sessionstart", compactSummary: "none", hookTimeoutMs: HOOK_TIMEOUT_MS, denyChannel: "deny-reason",
+    hookChannel: { kind: "home-file", path: ".gemini/config/hooks.json" }, skillChannel: { kind: "home-dir", path: ".gemini/config/skills" },
+    decode: antigravity.decode, encode: antigravity.encode,
+  },
 ] satisfies Row[]);
 
 const BY_ID = new Map<AgentId, AdapterRow>(ADAPTERS.map((r) => [r.id, r]));
@@ -149,7 +166,7 @@ export function dumpRunsThenReplaces(row: AdapterRow): boolean {
 
 // DECISIONS-r11 (B): rows whose encode carries a UserPromptSubmit hint as additionalContext. Only these rows
 // get turn-boundary recall after a compaction; pi and opencode keep their one compact path (ADR-0001).
-const RECALL_ROWS: ReadonlySet<AgentId> = new Set<AgentId>(["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "zcode", "kiro"]); // D-R33-KIRO-RECALL-1
+const RECALL_ROWS: ReadonlySet<AgentId> = new Set<AgentId>(["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "zcode", "kiro", "antigravity"]); // D-R33-KIRO-RECALL-1
 
 export function hasRecall(row: AdapterRow): boolean {
   return RECALL_ROWS.has(row.id);

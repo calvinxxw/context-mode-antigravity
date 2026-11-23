@@ -19,6 +19,9 @@ const PLUGIN_DIR = path.join("plugins", "claude-code");
 const PLUGIN_SOURCE = "./plugins/claude-code";
 const CLAUDE_MARKETPLACE = path.join(".claude-plugin", "marketplace.json");
 const CODEX_MARKETPLACE = path.join(".agents", "plugins", "marketplace.json");
+const ANTIGRAVITY_MANIFEST = path.join(".antigravity-plugin", "plugin.json");
+const ANTIGRAVITY_MCP = "mcp_config.json";
+const ANTIGRAVITY_HOOKS = "hooks.json";
 
 const BUILT_PREFIX = "plugins/claude-code/";
 const GEMINI_HOOKS = path.join("hooks", "hooks.json");
@@ -80,6 +83,11 @@ export function writeMainTree(pkg, repo, version) {
   const qwen = readJson(path.join(pkg, "qwen-extension.json"));
   writeJson(path.join(repo, "qwen-extension.json"), repoint(qwen));
   writeJson(path.join(repo, qwen.hooks), repoint(readJson(path.join(pkg, qwen.hooks))));
+  if (existsSync(path.join(pkg, ANTIGRAVITY_MANIFEST))) {
+    writeJson(path.join(repo, ANTIGRAVITY_MANIFEST), readJson(path.join(pkg, ANTIGRAVITY_MANIFEST)));
+    writeJson(path.join(repo, ANTIGRAVITY_MCP), repoint(readJson(path.join(pkg, ANTIGRAVITY_MCP))));
+    writeJson(path.join(repo, ANTIGRAVITY_HOOKS), repoint(readJson(path.join(pkg, ANTIGRAVITY_HOOKS))));
+  }
   writeJson(path.join(repo, CODEX_MARKETPLACE), {
     name: SERVER_KEY,
     interface: { displayName: SERVER_KEY },

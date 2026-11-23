@@ -25,6 +25,8 @@ const PACKAGE_FILE = "package.json";
 
 // D4: v1 `context-mode hook <platform> <event>` platform names (https://github.com/mksglu/context-mode/blob/274600e2ffab843e89c1dfa09b0d649e650c962f/docs/v2/spikes/setup/S-V1.md) -> v2 agent id.
 export const V1_PLATFORM_AGENT: Readonly<Record<string, AgentId>> = Object.freeze({
+  antigravity: "antigravity",
+  "antigravity-cli": "antigravity",
   "claude-code": "claude-code",
   codex: "codex",
   "copilot-cli": "copilot-cli",

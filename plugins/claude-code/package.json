@@ -5,7 +5,7 @@
   "bugs": {
     "url": "https://github.com/mksglu/context-mode/issues"
   },
-  "description": "Context window saver for 11 coding agents. Local and free: sandboxed code execution, FTS5 search, session continuity.",
+  "description": "Context window saver for 12 coding agents. Local and free: sandboxed code execution, FTS5 search, session continuity.",
   "engines": {
     "node": ">=24.15.0"
   },
@@ -14,6 +14,7 @@
     "./server": "./opencode/plugin.js"
   },
   "files": [
+    ".antigravity-plugin",
     ".claude-plugin",
     ".codex-plugin",
     ".zcode-plugin",
@@ -27,6 +28,8 @@
     "gemini-extension.json",
     "hook.mjs",
     "hooks",
+    "hooks.json",
+    "mcp_config.json",
     "omp",
     "opencode",
     "pi",
@@ -38,6 +41,7 @@
   ],
   "homepage": "https://github.com/mksglu/context-mode#readme",
   "keywords": [
+    "antigravity",
     "claude-code",
     "codex",
     "gemini-cli",

@@ -88,11 +88,11 @@ import { vscodeMcpFile } from "../harness/vscode-user-dir.mjs";
   // D-FU-RM-GEMINI-1: Gemini reads only hooks/hooks.json; every other host ships hooks/<id>.json.
   const hookFileOf = (id) => (id === "gemini" ? "hooks" : id) + ".json";
   const readHooks = (id) => JSON.parse(readFileSync(path.join(HOOKS_OUT, hookFileOf(id)), "utf8"));
-  const SPAWN_HOOK_AGENTS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode"];
+  const SPAWN_HOOK_AGENTS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "antigravity"];
   // impl/10 §1.5 "Timeout key" column: key and unit per host shape.
   const TIMEOUT_KEY = {
     "claude-code": "timeout", codex: "timeout", gemini: "timeout", qwen: "timeout",
-    "copilot-cli": "timeoutSec", vscode: "timeout", kiro: "timeout", zcode: "timeoutMs",
+    "copilot-cli": "timeoutSec", vscode: "timeout", kiro: "timeout", zcode: "timeoutMs", antigravity: "timeout",
   };
 
   // Every command entry of a host hook file, flattened: [{ event, entry, matcher }].
@@ -101,6 +101,14 @@ import { vscodeMcpFile } from "../harness/vscode-user-dir.mjs";
     const out = [];
     if (id === "kiro") {
       for (const h of doc.hooks) out.push({ event: h.trigger, entry: { ...h.action, timeout: h.timeout }, matcher: h.matcher });
+    } else if (id === "antigravity") {
+      for (const [event, items] of Object.entries(doc["context-mode"])) {
+        if (event === "enabled") continue;
+        for (const item of items) {
+          if (Array.isArray(item.hooks)) for (const e of item.hooks) out.push({ event, entry: e, matcher: item.matcher });
+          else out.push({ event, entry: item, matcher: undefined });
+        }
+      }
     } else if (id === "zcode") {
       // D-HF-ZCODE-SHAPE-1: matcher groups {matcher?, hooks:[{type,command,timeoutMs}]} under hooks.events.<Event>.
       for (const [event, groups] of Object.entries(doc.hooks.events)) for (const g of groups) for (const e of g.hooks) out.push({ event, entry: e, matcher: g.matcher });
@@ -133,6 +141,7 @@ import { vscodeMcpFile } from "../harness/vscode-user-dir.mjs";
     codex: ["Bash", "apply_patch", ...TOOL_ORDER.map((t) => "mcp__context_mode__" + t)],
     qwen: ["run_shell_command", "Shell", "read_file", "grep_search", "web_fetch", ...TOOL_ORDER.map((t) => "mcp__context-mode__" + t)],
     zcode: ["Bash", "Read", "Grep", "WebFetch", "Write", "Edit", "NotebookEdit", ...TOOL_ORDER.map((t) => "mcp__context-mode__" + t)],
+    antigravity: ["run_command", "view_file", "read_file", "grep_search", "read_url_content", "write_to_file", "replace_file_content", "multi_replace_file_content", "write_file", "edit_file", ...TOOL_ORDER.map((t) => "mcp_context-mode_" + t)],
   };
 
   test("[M3] GP1/hooks-json-one-matcher-per-tool", () => {
@@ -319,7 +328,7 @@ import { vscodeMcpFile } from "../harness/vscode-user-dir.mjs";
   // covers: build/build.mjs, build/manifests.ts.
   const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const OUT = path.join(REPO_ROOT, "release-out");
-  const MANIFESTS = [".claude-plugin/plugin.json", "gemini-extension.json", "qwen-extension.json", "copilot/plugin.json"];
+  const MANIFESTS = [".claude-plugin/plugin.json", "gemini-extension.json", "qwen-extension.json", "copilot/plugin.json", "mcp_config.json"];
 
   const readJson = (rel) => JSON.parse(readFileSync(path.join(OUT, rel), "utf8"));
   const hookFiles = () => existsSync(path.join(OUT, "hooks"))
@@ -391,7 +400,7 @@ import { vscodeMcpFile } from "../harness/vscode-user-dir.mjs";
   // the v2 bug form (ADR-0014), and no doc names a retired tool. Docs-only: needs no release-out/.
   // e2e/ never imports src/: the host list is the 11 v2 agents (ADR-0015 row 4; omp per ADR-0026).
   const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const HOSTS = ["claude-code", "codex", "copilot-cli", "gemini", "kiro", "omp", "opencode", "pi", "qwen", "vscode", "zcode"];
+  const HOSTS = ["antigravity", "claude-code", "codex", "copilot-cli", "gemini", "kiro", "omp", "opencode", "pi", "qwen", "vscode", "zcode"];
   const RETIRED_TOOLS = ["ctx_fetch_and_index", "ctx_batch_execute"];
   const BUG_FORM = "https://github.com/mksglu/context-mode/issues/new?template=bug.yml";
   const DISCORD = "https://discord.gg/DCN9jUgN5v";
@@ -547,7 +556,7 @@ import { vscodeMcpFile } from "../harness/vscode-user-dir.mjs";
   // build/build.mjs wrote (gate gp-cases layer builds it first). covers: build/build.mjs, build/manifests.ts.
   const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
   const OUT = path.join(REPO_ROOT, "release-out");
-  const MANIFESTS = [".claude-plugin/plugin.json", "gemini-extension.json", "qwen-extension.json", "copilot/plugin.json"];
+  const MANIFESTS = [".claude-plugin/plugin.json", "gemini-extension.json", "qwen-extension.json", "copilot/plugin.json", "mcp_config.json"];
   const PLUGIN_ROOT = "${CLAUDE_PLUGIN_ROOT}/";
   // Files the bundles load next to themselves at run time (hook.mjs -> run.mjs/search.mjs wrappers,
   // D5 fixture, in-process entries, command skills).
@@ -570,9 +579,11 @@ import { vscodeMcpFile } from "../harness/vscode-user-dir.mjs";
   }
   const servers = () => MANIFESTS.flatMap((m) => Object.values(readJson(m).mcpServers));
   const EXTENSION_ROOT = "${extensionPath}${/}"; // qwen-extension.json server path (D-FU-RM-QWEN-1)
+  const AGY_PLUGIN_ROOT = "${PLUGIN_ROOT}/"; // antigravity mcp_config.json server path
   const strip = (raw) => {
     const p = raw.split('"').join("");
     if (p.startsWith(EXTENSION_ROOT)) return p.slice(EXTENSION_ROOT.length);
+    if (p.startsWith(AGY_PLUGIN_ROOT)) return p.slice(AGY_PLUGIN_ROOT.length);
     return p.startsWith(PLUGIN_ROOT) ? p.slice(PLUGIN_ROOT.length) : p;
   };
 

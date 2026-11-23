@@ -68,7 +68,7 @@ describe("ADR-0018 build: release-out tree", () => {
   });
 
   // impl/13 §2.2 steps 4, 6, 8 (DEVIATIONS D-M6-arch-3, D-M6-B2-1).
-  const MANIFESTS = [".claude-plugin/plugin.json", "gemini-extension.json", "qwen-extension.json", "copilot/plugin.json"];
+  const MANIFESTS = [".antigravity-plugin/plugin.json", ".claude-plugin/plugin.json", "gemini-extension.json", "qwen-extension.json", "copilot/plugin.json"];
   const SKILLS = ["ctx-stats", "ctx-doctor", "ctx-upgrade"];
 
   test("[M6] build/version-flag: --version lands in every manifest; no flag keeps 0.0.0-dev", (t) => {
@@ -256,9 +256,11 @@ describe("ADR-0018 build: manifests", () => {
     codex: "^(Bash|apply_patch|mcp__context_mode__ctx_.*)$",
     qwen: "^(run_shell_command|Shell|read_file|grep_search|web_fetch|mcp__context-mode__ctx_.*)$",
     zcode: `^(${CLAUDE_MATCHER_NAMES}|mcp__context-mode__ctx_.*)$`,
+    antigravity: "^(run_command|view_file|read_file|grep_search|read_url_content|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file|mcp_context-mode_ctx_.*)$",
   };
 
   const EXPECTED_FILES = [
+    ".antigravity-plugin/plugin.json",
     ".claude-plugin/marketplace.json",
     ".claude-plugin/plugin.json",
     ".codex-plugin/hooks.json", // ADR-0023 D-NI-CODEX-1
@@ -268,6 +270,8 @@ describe("ADR-0018 build: manifests", () => {
     ".zcode-plugin/plugin.json",
     "copilot/plugin.json",
     "gemini-extension.json",
+    "hooks.json",
+    "hooks/antigravity.json",
     "hooks/claude-code.json",
     "hooks/codex.json",
     "hooks/copilot-cli.json",
@@ -276,6 +280,7 @@ describe("ADR-0018 build: manifests", () => {
     "hooks/qwen.json",
     "hooks/vscode.json",
     "hooks/zcode.json",
+    "mcp_config.json",
     "package.json",
     "qwen-extension.json",
   ];
@@ -448,8 +453,8 @@ describe("ADR-0018 build: manifests", () => {
   // name, version, bin, type, engines, files and pi (Pi reads "pi".extensions from the package dir); no dependencies,
   // no scripts, no private.
   const D1_FILES = [
-    ".claude-plugin", ".codex-plugin", ".zcode-plugin", "LICENSE", "README.md", "SHA256SUMS", "cli.mjs", "codex", "copilot", "fixtures", "gemini-extension.json", "hook.mjs", "hooks",
-    "omp", "opencode", "pi", "qwen-extension.json", "run.mjs", "search.mjs", "server.mjs", "skills",
+    ".antigravity-plugin", ".claude-plugin", ".codex-plugin", ".zcode-plugin", "LICENSE", "README.md", "SHA256SUMS", "cli.mjs", "codex", "copilot", "fixtures", "gemini-extension.json", "hook.mjs", "hooks",
+    "hooks.json", "mcp_config.json", "omp", "opencode", "pi", "qwen-extension.json", "run.mjs", "search.mjs", "server.mjs", "skills",
   ];
   test("package.json is the D1 npm shape: name, version, bin, type, engines, files, pi (extensions, skills)", (t) => {
     const dir = scratch(t);
@@ -723,6 +728,7 @@ describe("ADR-0019 build: host skills", () => {
     pi: "ctx_stats",
     opencode: "ctx_stats",
     omp: SHARED_STATS, // D-OMP-SKILLS-1: <plugin>/skills, bare ctx_stats
+    antigravity: "mcp_context-mode_ctx_stats",
   };
 
   test("[D-N5-SKILL-1] the built package's ctx-stats skill names each host's real tool once, never a doubled prefix", () => {
@@ -1007,6 +1013,8 @@ describe("ADR-0019 build: npm package", () => {
   test("[M7] cli/hook-v1-platform-map: every v1 platform name maps to its v2 agent id", async () => {
     const { V1_PLATFORM_AGENT } = await import("../src/entries/cli.ts");
     assert.deepEqual(V1_PLATFORM_AGENT, {
+      antigravity: "antigravity",
+      "antigravity-cli": "antigravity",
       "claude-code": "claude-code",
       codex: "codex",
       "copilot-cli": "copilot-cli",

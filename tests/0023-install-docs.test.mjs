@@ -189,7 +189,7 @@ describe("ADR-0023 native install commands per host", { concurrency: CONC }, () 
     assert.equal(fencedBlocks(page.slice(page.indexOf("\n## Remove\n")))[0][0], "omp plugin uninstall context-mode", "native remove first");
     for (const bad of ["npm:context-mode", "context-mode@next", "#release", "PI_CODING_AGENT_DIR"]) assert.ok(!page.includes(bad), `omp.md has ${bad}`);
     const list = read("docs", "install", "README.md");
-    assert.ok(list.includes("11 agents") && !list.includes("10 agents"), "docs/install/README.md says 11 agents");
+    assert.ok(list.includes("12 agents") && !list.includes("10 agents"), "docs/install/README.md says 12 agents");
     assert.ok(list.includes("| OMP | `omp plugin install context-mode` | `omp plugin upgrade context-mode` |"), "docs/install/README.md OMP row");
   });
 

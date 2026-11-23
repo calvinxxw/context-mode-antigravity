@@ -24,6 +24,12 @@ export function ownDirsOf(agent: AgentId, env: NodeJS.ProcessEnv): string[] {
     : agent === "opencode" ? [opencodeDirOf(env, home)]
     : agent === "pi" ? [piAgentDirOf(env, home)]
     : agent === "vscode" ? [join(home, ...AGENT_HOME_DIR.vscode), vscodeUserDirOf(env, home)]
+    : agent === "antigravity" ? [
+      join(home, ...AGENT_HOME_DIR.antigravity),
+      join(home, ".gemini", "antigravity"),
+      join(home, ".gemini", "antigravity-cli"),
+      join(home, ".gemini", "antigravity-ide"),
+    ]
     : [join(home, ...AGENT_HOME_DIR[agent])];
   return [...own, shared];
 }

@@ -315,6 +315,29 @@ function scanZcode(agentHome: string, out: V1Finding[]): void {
   }
 }
 
+function scanAntigravity(home: string, agentHome: string, out: V1Finding[]): void {
+  const hooksFile = join(agentHome, HOOKS_JSON_FILE);
+  const doc = readJson(hooksFile);
+  if (isObj(doc)) {
+    for (const [name, group] of Object.entries(doc)) {
+      if (!isObj(group)) continue;
+      for (const [event, entries] of Object.entries(group)) {
+        listOf(entries).forEach((entry, i) => {
+          const direct = commandOf(entry);
+          if (direct !== null && isV1Hook(direct)) out.push(finding(hooksFile, keyPath(name, event, i), V1_REASON.hook));
+          if (isObj(entry)) {
+            listOf(entry[HOOKS_KEY]).forEach((inner, j) => {
+              const cmd = commandOf(inner);
+              if (cmd !== null && isV1Hook(cmd)) out.push(finding(hooksFile, keyPath(name, event, i, HOOKS_KEY, j), V1_REASON.hook));
+            });
+          }
+        });
+      }
+    }
+  }
+  dataDir(join(home, ".gemini", V1_DATA_DIR_NAME), V1_REASON.dataDirShared, out);
+}
+
 /** Name of the first <os tmp>/context-mode-* entry, or null; stops at the first match. */
 function firstTmpMatch(dir: string): string | null {
   let handle;
@@ -382,6 +405,7 @@ export function detectV1(agent: AgentId, home: string, scope: V1Scope = {}): V1F
     case "pi": scanPi(scope.piAgentDir !== undefined && scope.piAgentDir !== "" ? scope.piAgentDir : join(agentHome, PI_AGENT_DIR), agentHome, out); break; // D-WIN-PIDIR-1: empty is unset
     case "opencode": scanOpencode(agentHome, out); break;
     case "zcode": scanZcode(agentHome, out); break;
+    case "antigravity": scanAntigravity(home, agentHome, out); break;
   }
   scanAll(home, scope.tmp ?? tmpdir(), out);
   return out;

@@ -23,7 +23,7 @@ function readReplaceTrigger(raw) {
 }
 var REPLACE_TRIGGER_BYTES = readReplaceTrigger(process.env[REPLACE_TRIGGER_ENV]);
 var RANGE_READ_TOOLS = Object.freeze(["Read", "view"]);
-var READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range"]);
+var READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range", "StartLine", "EndLine"]);
 var SKILL_LOAD_TOOLS = Object.freeze(["Skill"]);
 function shellWord(s) {
   return "'" + s.split("'").join("'\\''") + "'";
@@ -243,10 +243,10 @@ var HOOK_FAIL_CWD_KEYS = Object.freeze(["cwd", "directory"]);
 var HOOK_FAIL_PRE_EVENTS = Object.freeze(["pretooluse", "beforetool", "tool_call", "execute.before", "tool.execute.before"]);
 var HOOK_FAULT_STAGES = Object.freeze(["decode", "project", "policy", "store", "encode"]);
 var HOOK_FAIL_TOOLS = Object.freeze({
-  shell: Object.freeze(["Bash", "bash", "shell"]),
-  read: Object.freeze(["Read", "read_file"]),
+  shell: Object.freeze(["Bash", "bash", "shell", "run_command"]),
+  read: Object.freeze(["Read", "read_file", "view_file"]),
   grep: Object.freeze(["Grep", "grep_search"]),
-  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch"])
+  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch", "read_url_content"])
 });
 var HOOK_FAIL_REDIRECT = Object.freeze({
   read: "Read the file in parts with offset and limit, or process it with ctx_execute(language, code); only what you print comes back.",
@@ -278,7 +278,7 @@ var DUMP_COUNT_FLAGS = Object.freeze(["-n", "-c", "--lines", "--bytes"]);
 var SED_COMMAND = "sed";
 var SED_QUIET_FLAGS = Object.freeze(["-n", "--quiet", "--silent"]);
 var JQ_COMMAND = "jq";
-var READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath"]);
+var READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath", "AbsolutePath", "Path"]);
 var READ_PATH_LIST_KEY = "filePaths";
 var READ_MEDIA_TYPES = Object.freeze({
   png: { exts: [".png"], sig: [{ at: 0, bytes: [137, 80, 78, 71, 13, 10, 26, 10] }] },
@@ -298,6 +298,7 @@ var READ_MEDIA_BY_AGENT = Object.freeze({
   gemini: READ_IMAGES_AND_PDF,
   qwen: READ_IMAGES_AND_PDF,
   opencode: READ_IMAGES_AND_PDF,
+  antigravity: READ_IMAGES_AND_PDF,
   pi: READ_IMAGES,
   omp: READ_IMAGES,
   vscode: READ_IMAGES,
@@ -370,8 +371,10 @@ var AGENT_HOME_DIR = Object.freeze({
   zcode: [".zcode"],
   pi: [".pi"],
   opencode: [".config", "opencode"],
-  omp: [".omp"]
+  omp: [".omp"],
   // ADR-0026: OMP data and plugins live under ~/.omp
+  antigravity: [".gemini", "config"]
+  // Google Antigravity unified global config dir (App, CLI, IDE)
 });
 var UPGRADE_MODES = Object.freeze(["upgrade", "uninstall"]);
 var GIT_CLONE_ARGS = Object.freeze(["clone", "--depth", "1", "--branch"]);
@@ -396,16 +399,6 @@ var OPS_SPLIT_FILES = Object.freeze([
 ]);
 var unsupported = (h) => Object.freeze(h);
 var UNSUPPORTED_HOSTS = Object.freeze([
-  unsupported({
-    id: "antigravity",
-    name: "Antigravity",
-    clientNames: ["antigravity", "antigravity-client", "antigravity-cli", "agy"],
-    envVars: ["ANTIGRAVITY_CLI_ALIAS"],
-    pluginPaths: [[".gemini", "config", "plugins"], [".gemini", "antigravity", "plugins"], [".gemini", "antigravity-cli", "plugins"], [".gemini", "antigravity-ide", "plugins"]],
-    configDirs: [".gemini/antigravity", ".gemini/antigravity-cli", ".gemini/config"],
-    binaries: ["agy"],
-    source: "v1.0.169:src/adapters/client-map.ts:15-17; detect.ts:156,481-483; #1340"
-  }),
   unsupported({
     id: "cursor",
     name: "Cursor",
@@ -478,8 +471,9 @@ var HOOK_HOST_FILE = Object.freeze({
   zcode: { root: "home", file: [".zcode", "cli", "config.json"], key: ["hooks", "events"], shape: "zcode", timeoutKey: "timeoutMs", matcher: true },
   pi: null,
   opencode: null,
-  omp: null
+  omp: null,
   // ADR-0026: in-process, no hook file
+  antigravity: { root: "home", file: [".gemini", "config", "hooks.json"], key: [SERVER_KEY], shape: "antigravity", timeoutKey: "timeout", matcher: true }
 });
 var TOOL_HOOK_EVENTS = Object.freeze(["PreToolUse", "PostToolUse"]);
 var KIRO_TOOL_MATCHERS = Object.freeze([["@mcp", "mcp"], ["shell", "shell"]]);
@@ -497,7 +491,8 @@ var UPGRADE_HOST_COMMAND = Object.freeze({
   "copilot-cli": "npm i -g context-mode && context-mode setup --agents copilot-cli",
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
-  zcode: "npm i -g context-mode && context-mode setup --agents zcode"
+  zcode: "npm i -g context-mode && context-mode setup --agents zcode",
+  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode"
 });
 var V1_SCRIPT_NAMES = Object.freeze([
   "afteragentresponse.mjs",
@@ -583,6 +578,14 @@ var CODEX_OMIT_TOOLS_FROM_FIELD = "omit_tools_from";
 var CODEX_OMIT_DEFERRED = Object.freeze(["deferred"]);
 var CODEX_APPROVAL_MODE_FIELD = "default_tools_approval_mode";
 var CODEX_APPROVAL_APPROVE = "approve";
+var ANTIGRAVITY_EAGER_TOOLS = Object.freeze({
+  ctx_execute: Object.freeze({ eager: true }),
+  ctx_batch: Object.freeze({ eager: true }),
+  ctx_index: Object.freeze({ eager: true }),
+  ctx_search: Object.freeze({ eager: true }),
+  ctx_resume: Object.freeze({ eager: true })
+});
+var ANTIGRAVITY_MCP_FILE = "mcp_config.json";
 var OWN_MCP_ENTRY = Object.freeze({
   codex: { file: [".codex", "config.toml"], key: ["mcp_servers", SERVER_KEY], fields: { [CODEX_OMIT_TOOLS_FROM_FIELD]: CODEX_OMIT_DEFERRED, [CODEX_APPROVAL_MODE_FIELD]: CODEX_APPROVAL_APPROVE } },
   vscode: { file: [VSCODE_MCP_FILE], key: ["servers", SERVER_KEY] },
@@ -592,6 +595,11 @@ var OWN_MCP_ENTRY = Object.freeze({
     key: ["mcp", "servers", SERVER_KEY],
     fields: { type: "stdio", enabled: true, timeoutMs: EXEC_TIMEOUT_MS },
     also: [[ZCODE_MCP_FEATURE_KEY, true]]
+  },
+  antigravity: {
+    file: [".gemini", "config", ANTIGRAVITY_MCP_FILE],
+    key: ["mcpServers", SERVER_KEY],
+    fields: { tools: ANTIGRAVITY_EAGER_TOOLS }
   }
 });
 var REPORT_ENV_ENUMS = Object.freeze({
@@ -663,7 +671,8 @@ var NATIVE_INSTALL = Object.freeze({
   "copilot-cli": ["npm i -g context-mode", "context-mode setup --agents copilot-cli"],
   vscode: ["npm i -g context-mode", "context-mode setup --agents vscode"],
   kiro: ["npm i -g context-mode", "context-mode setup --agents kiro"],
-  zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"]
+  zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"],
+  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode"]
 });
 var ISSUE_FORM_URL = `https://github.com/${ISSUE_REPO_SLUG}/issues/new?template=${ISSUE_FORM_FILE}`;
 
@@ -1506,6 +1515,201 @@ function encode10(ev, d, _extra) {
   }
 }
 
+// src/adapters/antigravity.ts
+var TOOL_NAME_PREFIX11 = "mcp_context-mode_";
+var PLUGIN_TOOL_NAME_PREFIX2 = "mcp_context-mode_context-mode_";
+var UNDERSCORE_TOOL_PREFIX = "mcp_context_mode_";
+var SHELL_TOOL_NAMES6 = Object.freeze(["run_command"]);
+var READ_TOOL_NAMES2 = Object.freeze(["view_file", "read_file"]);
+var GREP_TOOL_NAMES = Object.freeze(["grep_search"]);
+var WEBFETCH_TOOL_NAMES2 = Object.freeze(["read_url_content"]);
+var EDIT_TOOL_NAMES = Object.freeze([
+  "write_to_file",
+  "replace_file_content",
+  "multi_replace_file_content",
+  "write_file",
+  "edit_file"
+]);
+var EVENT_MAP = Object.freeze({
+  SessionStart: "SessionStart",
+  UserPromptSubmit: "PreInvocation",
+  PreToolUse: "PreToolUse",
+  PostToolUse: "PostToolUse"
+});
+var ANTIGRAVITY_EVENTS = {
+  SessionStart: "SessionStart",
+  PreInvocation: "UserPromptSubmit",
+  UserPromptSubmit: "UserPromptSubmit",
+  PreToolUse: "PreToolUse",
+  PostToolUse: "PostToolUse",
+  PostInvocation: "Stop",
+  Stop: "Stop"
+};
+var NATIVE_TO_CANONICAL8 = {
+  run_command: "Bash",
+  view_file: "Read",
+  read_file: "Read",
+  grep_search: "Grep",
+  read_url_content: "WebFetch",
+  write_to_file: "Write",
+  write_file: "Write",
+  replace_file_content: "Edit",
+  multi_replace_file_content: "Edit",
+  edit_file: "Edit",
+  ask_question: "AskUserQuestion"
+};
+var CALL_MCP_TOOL = "call_mcp_tool";
+var OWN_SERVER_NAMES = ["context-mode", "context-mode_context-mode"];
+var OWN_TOOL_PREFIX = "ctx_";
+var MCP_PREFIX4 = "mcp_";
+var MCP_SEP4 = "_";
+var EMPTY_JSON = { stdout: "{}", exitCode: 0 };
+var ALLOW_PRE_TOOL = { stdout: JSON.stringify({ decision: "allow" }), exitCode: 0 };
+function own2(p, key) {
+  return Object.hasOwn(p, key) ? p[key] : void 0;
+}
+function isRecord3(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+function str(v) {
+  return typeof v === "string" && v !== "" ? v : void 0;
+}
+function canonicalName6(name, args) {
+  if (name === CALL_MCP_TOOL) {
+    const server = str(own2(args, "ServerName"));
+    const tool = str(own2(args, "ToolName"));
+    if (server !== void 0 && tool !== void 0) {
+      if (OWN_SERVER_NAMES.includes(server) && tool.startsWith(OWN_TOOL_PREFIX)) return tool;
+      return "mcp:" + server + ":" + tool;
+    }
+    return name;
+  }
+  if (name.startsWith(PLUGIN_TOOL_NAME_PREFIX2)) return name.slice(PLUGIN_TOOL_NAME_PREFIX2.length);
+  if (name.startsWith(TOOL_NAME_PREFIX11)) return name.slice(TOOL_NAME_PREFIX11.length);
+  if (name.startsWith(UNDERSCORE_TOOL_PREFIX)) return name.slice(UNDERSCORE_TOOL_PREFIX.length);
+  if (Object.hasOwn(NATIVE_TO_CANONICAL8, name)) return NATIVE_TO_CANONICAL8[name];
+  if (!name.startsWith(MCP_PREFIX4)) return name;
+  const rest = name.slice(MCP_PREFIX4.length);
+  const sep3 = rest.indexOf(MCP_SEP4);
+  if (sep3 <= 0 || sep3 === rest.length - 1) return name;
+  return "mcp:" + rest.slice(0, sep3) + ":" + rest.slice(sep3 + MCP_SEP4.length);
+}
+function normalizeInput(name, canonical, args) {
+  if (name === CALL_MCP_TOOL) {
+    const inner = own2(args, "Arguments");
+    if (isRecord3(inner)) return { ...args, ...inner };
+    return args;
+  }
+  const out = { ...args };
+  if (canonical === "Bash") {
+    const cmd = str(own2(args, "CommandLine")) ?? str(own2(args, "command"));
+    if (cmd !== void 0 && own2(out, "command") === void 0) out.command = cmd;
+    const desc = str(own2(args, "toolSummary")) ?? str(own2(args, "description"));
+    if (desc !== void 0 && own2(out, "description") === void 0) out.description = desc;
+  } else if (canonical === "Read") {
+    const fp = str(own2(args, "AbsolutePath")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    if (fp !== void 0 && own2(out, "file_path") === void 0) out.file_path = fp;
+    const start = own2(args, "StartLine");
+    if (start !== void 0 && start !== null && own2(out, "offset") === void 0) out.offset = start;
+    const end = own2(args, "EndLine");
+    if (end !== void 0 && end !== null && own2(out, "limit") === void 0) out.limit = end;
+  } else if (canonical === "Grep") {
+    const pat = str(own2(args, "Query")) ?? str(own2(args, "Pattern"));
+    if (pat !== void 0 && own2(out, "pattern") === void 0) out.pattern = pat;
+    const sp = str(own2(args, "SearchPath"));
+    if (sp !== void 0 && own2(out, "path") === void 0) out.path = sp;
+  } else if (canonical === "WebFetch") {
+    const url = str(own2(args, "Url")) ?? str(own2(args, "url"));
+    if (url !== void 0 && own2(out, "url") === void 0) out.url = url;
+  } else if (canonical === "Write" || canonical === "Edit") {
+    const fp = str(own2(args, "TargetFile")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    if (fp !== void 0 && own2(out, "file_path") === void 0) out.file_path = fp;
+  }
+  return out;
+}
+function cwdOf(p) {
+  const direct = str(own2(p, "cwd"));
+  if (direct !== void 0) return direct;
+  const wsPaths = own2(p, "workspacePaths");
+  if (Array.isArray(wsPaths)) {
+    const first = wsPaths.find((x) => typeof x === "string" && x !== "");
+    if (first !== void 0) return first;
+  }
+  const ws = own2(p, "workspace");
+  if (isRecord3(ws)) {
+    const cur = str(own2(ws, "current_dir"));
+    if (cur !== void 0) return cur;
+  }
+  return "";
+}
+function readResult8(p) {
+  const err = own2(p, "error");
+  const isError = typeof err === "string" && err !== "";
+  const text = isError ? err : "";
+  return { isError, bytes: Buffer.byteLength(text), text };
+}
+function decode11(raw) {
+  if (!isRecord3(raw)) throw new Error("antigravity: hook payload is not a JSON object");
+  const native = own2(raw, "hookEventName") ?? own2(raw, "hook_event_name");
+  const event = typeof native === "string" && Object.hasOwn(ANTIGRAVITY_EVENTS, native) ? ANTIGRAVITY_EVENTS[native] : void 0;
+  if (event === void 0) throw new Error("antigravity: unknown hook event " + String(native));
+  const sessionId = str(own2(raw, "conversationId")) ?? str(own2(raw, "session_id")) ?? str(own2(raw, "sessionId")) ?? "";
+  const ev = { event, agent: "antigravity", sessionId, cwd: cwdOf(raw) };
+  const inv = own2(raw, "invocationNum");
+  const step = own2(raw, "stepIdx");
+  if (typeof inv === "number" && Number.isSafeInteger(inv)) ev.turn = inv;
+  else if (typeof step === "number" && Number.isSafeInteger(step)) ev.turn = step;
+  if (event === "SessionStart") ev.source = "startup";
+  if (event === "UserPromptSubmit") {
+    const prompt = own2(raw, "lastUserInput") ?? own2(raw, "prompt");
+    if (typeof prompt === "string") ev.prompt = prompt;
+  }
+  if (event === "PreToolUse" || event === "PostToolUse") {
+    const tc = own2(raw, "toolCall");
+    const call = isRecord3(tc) ? tc : void 0;
+    const name = String((call ? own2(call, "name") : own2(raw, "tool_name")) ?? "");
+    const rawArgs = call ? own2(call, "args") : own2(raw, "tool_input");
+    const args = isRecord3(rawArgs) ? rawArgs : {};
+    const canonical = canonicalName6(name, args);
+    const tool = { name, canonicalName: canonical, input: normalizeInput(name, canonical, args) };
+    const id = str(call ? own2(call, "id") : own2(raw, "tool_use_id"));
+    if (id !== void 0) tool.callId = id;
+    ev.tool = tool;
+  }
+  if (event === "PostToolUse") ev.result = readResult8(raw);
+  return ev;
+}
+function encode11(ev, d, _extra) {
+  if (ev.event === "PostToolUse" || ev.event === "Stop") return EMPTY_JSON;
+  if (ev.event === "PreToolUse") {
+    if (d.kind === "deny") {
+      const reason = d.rewritten === void 0 ? d.reason : d.rewritten + "\n" + d.reason;
+      return { stdout: JSON.stringify({ decision: "deny", reason }), exitCode: 0 };
+    }
+    return ALLOW_PRE_TOOL;
+  }
+  if (ev.event === "SessionStart") {
+    if (d.kind === "hint") {
+      return { stdout: JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: d.text } }] }), exitCode: 0 };
+    }
+    return EMPTY_JSON;
+  }
+  if (ev.event === "UserPromptSubmit") {
+    if (d.kind === "hint") {
+      return { stdout: JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: d.text } }] }), exitCode: 0 };
+    }
+    if (d.kind === "deny") {
+      const reason = d.rewritten === void 0 ? d.reason : d.rewritten + "\n" + d.reason;
+      return {
+        stdout: JSON.stringify({ injectSteps: [{ errorMessage: { userMessage: reason } }], terminationBehavior: "terminate" }),
+        exitCode: 0
+      };
+    }
+    return EMPTY_JSON;
+  }
+  return EMPTY_JSON;
+}
+
 // src/adapters/table.ts
 var CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
 var CLAUDE_TOOLS = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
@@ -1726,6 +1930,31 @@ var ADAPTERS = Object.freeze([
     encode: encode9,
     checkPermission
     // D-OMP-FIRE-1: agent omp in rows
+  },
+  {
+    // Native Google Antigravity adapter (Antigravity App, Antigravity CLI `agy`, Antigravity IDE).
+    // PostToolUse does not receive tool output, so Antigravity is a deny+redirect host; PreInvocation carries recall.
+    id: "antigravity",
+    installMode: "hooks+mcp",
+    projectSource: "spawn-cwd",
+    toolNamePrefix: TOOL_NAME_PREFIX11,
+    nativeTools: {
+      shell: [...SHELL_TOOL_NAMES6],
+      read: [...READ_TOOL_NAMES2],
+      grep: [...GREP_TOOL_NAMES],
+      webfetch: [...WEBFETCH_TOOL_NAMES2],
+      edit: [...EDIT_TOOL_NAMES]
+    },
+    execReadOnlyHint: false,
+    eventMap: EVENT_MAP,
+    compactDelivery: "sessionstart",
+    compactSummary: "none",
+    hookTimeoutMs: HOOK_TIMEOUT_MS,
+    denyChannel: "deny-reason",
+    hookChannel: { kind: "home-file", path: ".gemini/config/hooks.json" },
+    skillChannel: { kind: "home-dir", path: ".gemini/config/skills" },
+    decode: decode11,
+    encode: encode11
   }
 ]);
 var BY_ID = new Map(ADAPTERS.map((r) => [r.id, r]));
@@ -5221,8 +5450,8 @@ function claudeDirOf(env, home) {
   return dir !== void 0 && dir !== "" ? dir : join(home, ...AGENT_HOME_DIR["claude-code"]);
 }
 function opencodeDirOf(env, home) {
-  const own2 = env[OPENCODE_CONFIG_DIR_ENV];
-  if (own2 !== void 0 && own2 !== "") return own2;
+  const own3 = env[OPENCODE_CONFIG_DIR_ENV];
+  if (own3 !== void 0 && own3 !== "") return own3;
   const xdg = env[XDG_CONFIG_HOME_ENV];
   if (xdg !== void 0 && xdg !== "") return join(xdg, AGENT_HOME_DIR.opencode[AGENT_HOME_DIR.opencode.length - 1]);
   return join(home, ...AGENT_HOME_DIR.opencode);
@@ -5641,8 +5870,13 @@ function ownDirsOf(agent, env) {
   const home = homeDirOf(env);
   if (home === null) return [];
   const shared = join5(home, ...SHARED_SKILLS_DIR);
-  const own2 = agent === "claude-code" ? [claudeDirOf(env, home)] : agent === "codex" ? [codexDirOf(env, home)] : agent === "gemini" ? [geminiDirOf(env, home)] : agent === "copilot-cli" ? [copilotDirOf(env, home)] : agent === "kiro" ? [kiroDirOf(env, home)] : agent === "opencode" ? [opencodeDirOf(env, home)] : agent === "pi" ? [piAgentDirOf(env, home)] : agent === "vscode" ? [join5(home, ...AGENT_HOME_DIR.vscode), vscodeUserDirOf(env, home)] : [join5(home, ...AGENT_HOME_DIR[agent])];
-  return [...own2, shared];
+  const own3 = agent === "claude-code" ? [claudeDirOf(env, home)] : agent === "codex" ? [codexDirOf(env, home)] : agent === "gemini" ? [geminiDirOf(env, home)] : agent === "copilot-cli" ? [copilotDirOf(env, home)] : agent === "kiro" ? [kiroDirOf(env, home)] : agent === "opencode" ? [opencodeDirOf(env, home)] : agent === "pi" ? [piAgentDirOf(env, home)] : agent === "vscode" ? [join5(home, ...AGENT_HOME_DIR.vscode), vscodeUserDirOf(env, home)] : agent === "antigravity" ? [
+    join5(home, ...AGENT_HOME_DIR.antigravity),
+    join5(home, ".gemini", "antigravity"),
+    join5(home, ".gemini", "antigravity-cli"),
+    join5(home, ".gemini", "antigravity-ide")
+  ] : [join5(home, ...AGENT_HOME_DIR[agent])];
+  return [...own3, shared];
 }
 function isOwnFile(agent, cwd, p, env = process.env) {
   if (extname(p).toLowerCase() !== AGENT_FILE_EXT) return false;
@@ -5698,7 +5932,7 @@ var EXE_SUFFIX = ".exe";
 var COMMAND_STARTS = ";&|(`\n\r";
 var ALLOW = Object.freeze({ kind: "allow" });
 var deny = (reason) => ({ kind: "deny", reason });
-var str = (v) => typeof v === "string" ? v : void 0;
+var str2 = (v) => typeof v === "string" ? v : void 0;
 var present = (v) => v !== void 0 && v !== null;
 var has = (list2, v) => list2.includes(v);
 function decide(ev, row, userDeny, root = ev.cwd) {
@@ -5727,7 +5961,7 @@ function denyMessage(kind, match, row, intent) {
 }
 function readPath(input) {
   for (const k of READ_PATH_KEYS) {
-    const p = str(input[k]);
+    const p = str2(input[k]);
     if (p !== void 0 && p !== "") return p;
   }
   return void 0;
@@ -5741,7 +5975,7 @@ function userDenyHit(canonical, input, cwd, rules) {
   if (rules.length === 0) return null;
   const readRule = (p) => matchesAnyDenyPattern(resolve5(cwd, p), rules, { tool: READ, projectDir: cwd });
   if (canonical === BASH) {
-    const cmd = str(input.command);
+    const cmd = str2(input.command);
     return cmd === void 0 ? null : matchesAnyDenyPattern(cmd, rules);
   }
   if (canonical === READ) {
@@ -5752,10 +5986,10 @@ function userDenyHit(canonical, input, cwd, rules) {
     return null;
   }
   if (canonical === CTX_EXECUTE) {
-    const file = str(input.file);
+    const file = str2(input.file);
     const byFile = file === void 0 || file === "" ? null : readRule(file);
     if (byFile !== null) return byFile;
-    const code = str(input.code);
+    const code = str2(input.code);
     return isShellLanguage(input.language) && code !== void 0 ? shellHit(code, rules) : null;
   }
   if (canonical === CTX_BATCH && Array.isArray(input.commands)) {
@@ -5815,11 +6049,11 @@ function neverDenied(url) {
   return NEVER_DENY_HOSTS.some((h) => host === h || host.endsWith(HOST_SEP + h));
 }
 function webFetch(input, row) {
-  const url = str(input.url) ?? "";
+  const url = str2(input.url) ?? "";
   return neverDenied(url) ? ALLOW : deny(denyMessage("webfetch", url, row));
 }
 function bash(ev, row, input, rules, root) {
-  const cmd = str(input.command) ?? "";
+  const cmd = str2(input.command) ?? "";
   const parsed = parseShell(cmd);
   if (!parsed.ok) return couldMatch(cmd, rules) ? deny(prefixToolNames(PARSE_ERROR_DENY_LINE, row.toolNamePrefix)) : psShellDump(ev, cmd, row, root) ?? ALLOW;
   const cmds = unwrap(parsed.commands);
@@ -5830,7 +6064,7 @@ function bash(ev, row, input, rules, root) {
   if (!hasReplace(row) || isSubagentCall(ev)) {
     for (const c of cmds) {
       const kind = denyKind(c);
-      if (kind !== null) return deny(denyMessage(kind, cmd, row, str(input.description)));
+      if (kind !== null) return deny(denyMessage(kind, cmd, row, str2(input.description)));
     }
   }
   return shellDump(ev, cmds, row, root) ?? psShellDump(ev, cmd, row, root) ?? ALLOW;
@@ -6119,6 +6353,7 @@ function sourceOf(agent) {
     case "qwen":
     case "zcode":
     case "opencode":
+    case "antigravity":
       return "spawn-cwd";
     case "pi":
     case "omp":
@@ -6876,13 +7111,13 @@ function exit(code, out, err) {
     process.stderr.write(err, () => process.stdout.write(out, () => process.exit(code)));
   });
 }
-function decode11(b64) {
+function decode12(b64) {
   return Buffer.from(b64, "base64").toString("utf8");
 }
 function denyRules(b64) {
   let parsed;
   try {
-    parsed = JSON.parse(decode11(b64));
+    parsed = JSON.parse(decode12(b64));
   } catch {
     return null;
   }
@@ -6911,10 +7146,10 @@ async function runWrapperMain(argv, env) {
   const cmdArg = argv[2];
   const rulesArg = argv[3];
   if (cmdArg === void 0 || cmdArg === "" || rulesArg === void 0) return exit(RUN_FAIL_EXIT, "", RUN_USAGE_LINE + "\n");
-  const command = decode11(cmdArg);
+  const command = decode12(cmdArg);
   const rules = denyRules(rulesArg);
   if (rules === null) return exit(RUN_FAIL_EXIT, "", RUN_USAGE_LINE + "\n");
-  const description = argv[4] === void 0 ? "" : decode11(argv[4]);
+  const description = argv[4] === void 0 ? "" : decode12(argv[4]);
   const cwd = process.cwd();
   const sessionId = RUN_SESSION_PREFIX + randomUUID();
   const ev = {

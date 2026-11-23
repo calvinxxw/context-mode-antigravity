@@ -102,6 +102,7 @@ describe("PRD-v2 section 10: seeded hook fuzz on every host", () => {
     kiro: { keys: [SNAKE], events: ["SessionStart", "agentSpawn", "UserPromptSubmit", "PromptSubmit", "userPromptSubmit", "PreToolUse", "preToolUse", "PostToolUse", "postToolUse"] },
     pi: { keys: [{ event: "type", session: "sessionId", tool: "toolName", input: "input", result: "content", prompt: "message", cwd: "cwd" }], events: ["session_start", "session_compact", "input", "tool_call", "tool_result"] },
     opencode: { keys: [{ event: "type", session: "sessionID", tool: "tool", input: "args", result: "output", prompt: "message", cwd: "directory" }], events: ["context", "prompt", "execute.before", "execute.after", "compaction", "step-finish"] },
+    antigravity: { keys: [{ event: "hookEventName", session: "conversationId", tool: "toolName", input: "toolArgs", result: "error", prompt: "lastUserInput", cwd: "cwd" }], events: ["SessionStart", "PreInvocation", "PreToolUse", "PostToolUse", "Stop"] },
   };
   SPEC.omp = SPEC.pi; // ADR-0026 (D-OMP-ROW-1): OMP sends the Pi wire
   const PLAIN = new Set(["kiro", "pi", "opencode", "omp"]); // plain text hosts: deny by exit code 2 and text
@@ -357,6 +358,10 @@ describe("PRD-v2 section 10: seeded hook fuzz on every host", () => {
     if (host === "gemini") {
       const ok = keys.every((k) => ["hookSpecificOutput", "decision", "reason"].includes(k));
       return ok ? "" : "gemini unknown output keys " + keys.join(",");
+    }
+    if (host === "antigravity") {
+      const ok = keys.every((k) => ["decision", "reason", "injectSteps", "overwrite", "permissionOverrides", "terminationBehavior"].includes(k));
+      return ok ? "" : "antigravity unknown output keys " + keys.join(",");
     }
     // claude-code, codex, qwen, zcode, vscode: {hookSpecificOutput:{hookEventName, ...}}
     if (!(keys.length === 1 && keys[0] === "hookSpecificOutput" && isObj(j.hookSpecificOutput) && typeof j.hookSpecificOutput.hookEventName === "string")) return host + " output is not {hookSpecificOutput:{hookEventName}}: " + stdout.slice(0, 120);

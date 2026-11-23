@@ -876,6 +876,22 @@ function jsonState(n: NativePlugin, text: string): NativeStatus {
   return { state: "enabled", workspaceOff: false, hookGate };
 }
 
+/** agy plugin list --json: an array of { name, enabled, path?, hooks?, mcpServers?, skills? }. */
+function agyJsonState(n: NativePlugin, text: string): NativeStatus {
+  const none: NativeStatus = { state: undefined, workspaceOff: false };
+  let doc: unknown;
+  try { doc = JSON.parse(text); } catch { return none; }
+  const mine = Array.isArray(doc) ? doc.find((p) => isObj(p) && p.name === n.plugin) : undefined;
+  if (!isObj(mine)) return none;
+  if (mine.enabled !== true) return { state: "disabled", workspaceOff: false };
+  const pluginPath = typeof mine.path === "string" ? mine.path : undefined;
+  const hooksText = pluginPath ? readOr(path.join(pluginPath, n.hooksVia)) : undefined;
+  const own = `${AGENT_FLAG} antigravity`;
+  const hookGate = hooksText !== undefined && hooksText.includes(own) ? undefined
+    : `the installed ${n.plugin} plugin runs no ${own} hook; reinstall with: ${NATIVE_INSTALL.antigravity[0]}`;
+  return { state: "enabled", workspaceOff: false, hookGate };
+}
+
 /** #1378 D-1378-GEMINI-LIST-ERR-1: `gemini extensions install` left <gemini dir>/extensions/<plugin>/gemini-extension.json, but
  *  the list did not name it (an auth error such as 402, exit 0). The install is the host's; doctor quotes the list answer. */
 function unlistedExtension(n: NativePlugin, env: SetupContext["env"], home: string, out: string, status: number | null): { dir: string; note: string } | undefined {
@@ -965,6 +981,7 @@ function nativeState(row: CheckRow, env: SetupContext["env"], home: string): Nat
   }
   if (r.status !== 0) return none;
   if (n.format === "json") return jsonState(n, `${r.stdout}`);
+  if (n.format === "agy-json") return agyJsonState(n, `${r.stdout}`);
   return { state: codexJsonState(n, `${r.stdout}`), workspaceOff: false };
 }
 
@@ -1009,7 +1026,7 @@ async function nativeResult(row: CheckRow, ctx: SetupContext, apply?: { run: Run
   } else res.checks = await verifyRow(nativeRow(row, n), ctx);
   if (n.hookTrust) res.checks = withHookTrust(res.checks, hooks, !!apply?.dryRun);
   if (n.format === "extension") res.checks = withHookGate(res.checks, geminiGate(n, ctx, workspaceOff));
-  if (n.format === "json") res.checks = withHookGate(res.checks, hookGate);
+  if (n.format === "json" || n.format === "agy-json") res.checks = withHookGate(res.checks, hookGate);
   const bad = res.checks.filter((c) => !c.ok);
   if (bad.length) {
     res.status = "FAIL"; res.reason = bad.map((c) => `${c.name}: ${c.detail}`).join("; ");

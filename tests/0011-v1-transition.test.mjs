@@ -438,6 +438,7 @@ describe("GP11: v1 migration setup plants detectable footprints", { concurrency:
     opencode: [V1_REASON.opencodePlugin],
     zcode: [V1_REASON.zcodeHook],
     omp: [V1_REASON.dataRoot], // ADR-0026: v1 OMP was MCP-only; only the shared content root
+    antigravity: [V1_REASON.hook, V1_REASON.dataDirShared],
   };
 
   test("[M7] v1-migration-setup/own-agent-list-matches-AGENT_IDS", () => {

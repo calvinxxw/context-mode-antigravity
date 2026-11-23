@@ -46,5 +46,11 @@
     "values": [
       5000
     ]
+  },
+  "antigravity": {
+    "key": "timeout",
+    "values": [
+      5
+    ]
   }
 }

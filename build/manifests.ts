@@ -7,8 +7,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { ADAPTERS, hasReplace } from "../src/adapters/table.ts";
 import { FAILURE_EVENT as CLAUDE_FAILURE_EVENT } from "../src/adapters/claude-code.ts";
+import { PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX } from "../src/adapters/antigravity.ts";
 import type { AgentId } from "../src/core/contracts/agents.ts";
-import { KIRO_TOOL_MATCHERS, NODE_MIN, RELEASE_SUMS_FILE, SERVER_KEY } from "../src/core/contracts/constants.ts";
+import { ANTIGRAVITY_EAGER_TOOLS, ANTIGRAVITY_MCP_FILE, HOOKS_JSON_FILE, KIRO_TOOL_MATCHERS, NODE_MIN, RELEASE_SUMS_FILE, SERVER_KEY } from "../src/core/contracts/constants.ts";
 import type { AdapterRow } from "../src/core/contracts/types.ts";
 
 // Build-tool literals (same rule as build.mjs DEFAULT_OUT/BUNDLES; DEVIATIONS D-M3-A7-5).
@@ -133,6 +134,16 @@ function zcodeShape(row: AdapterRow): JsonObject {
   return { hooks: { enabled: true, events: byEvent } };
 }
 
+// {<hookName>:{enabled:true,SessionStart:[{type,command,timeout}],PreInvocation:[...],PreToolUse:[{matcher,hooks:[...]}],PostToolUse:[{matcher,hooks:[...]}]}} — Antigravity.
+function antigravityShape(row: AdapterRow, cmd: JsonObject = command(row)): JsonObject {
+  const group: JsonObject = { enabled: true };
+  const handler: JsonObject = { ...cmd, timeout: seconds(row) };
+  for (const [canonical, native] of events(row)) {
+    group[native] = isToolEvent(canonical) ? [{ matcher: buildMatcher(row, native), hooks: [handler] }] : [handler];
+  }
+  return { [SERVER_KEY]: group };
+}
+
 // impl/10 §1.5: one host hook shape per spawn agent; pi/opencode are in-process (no file). DEVIATIONS D-M3-A7-2.
 const HOOK_SHAPES: Readonly<Record<AgentId, ((row: AdapterRow) => JsonObject) | null>> = {
   "claude-code": (row) => withFailure(row, nestedShape(row, seconds(row), true)),
@@ -146,6 +157,7 @@ const HOOK_SHAPES: Readonly<Record<AgentId, ((row: AdapterRow) => JsonObject) | 
   pi: null,
   opencode: null,
   omp: null, // ADR-0026: in-process like pi
+  antigravity: antigravityShape,
 };
 
 // D-FU-RM-GEMINI-1: Gemini reads only hooks/hooks.json; every other host reads hooks/<id>.json.
@@ -235,6 +247,47 @@ function zcodePlugin(row: AdapterRow, version: string): [string, JsonObject][] {
   ];
 }
 
+// Native Antigravity plugin (.antigravity-plugin/plugin.json + root mcp_config.json + root hooks.json + skills/).
+// Contract: https://antigravity.google/docs/build-plugins.md (MCP args expand ${PLUGIN_ROOT}; hooks run with cwd = plugin root).
+const ANTIGRAVITY_PLUGIN_DIR = ".antigravity-plugin";
+const ANTIGRAVITY_PLUGIN_SCHEMA = "https://antigravity.google/schemas/v1/plugin.json";
+const ANTIGRAVITY_PLUGIN_ROOT = "${PLUGIN_ROOT}";
+const ANTIGRAVITY_REPO_URL = "https://github.com/calvinxxw/context-mode";
+function antigravityPlugin(row: AdapterRow, version: string): [string, JsonObject][] {
+  const meta = devMeta();
+  const pluginRow: AdapterRow = { ...row, toolNamePrefix: ANTIGRAVITY_PLUGIN_TOOL_PREFIX };
+  const hookCmd: JsonObject = { type: "command", command: [NODE_COMMAND, "./" + HOOK_BUNDLE, AGENT_FLAG, row.id].join(" ") };
+  return [
+    [ANTIGRAVITY_PLUGIN_DIR + "/plugin.json", {
+      $schema: ANTIGRAVITY_PLUGIN_SCHEMA,
+      name: SERVER_KEY,
+      displayName: "Context Mode",
+      version,
+      description: meta.description,
+      suggestedPrompts: [
+        "Run ctx_doctor to verify Context Mode is healthy in this workspace",
+        "Show ctx_stats for how much context was saved this session",
+        "Summarize my earlier session work with ctx_resume",
+      ],
+      author: author(),
+      homepage: meta.homepage,
+      repository: ANTIGRAVITY_REPO_URL,
+      license: meta.license,
+      keywords: [...meta.keywords],
+    }],
+    [ANTIGRAVITY_MCP_FILE, {
+      mcpServers: {
+        [SERVER_KEY]: {
+          command: NODE_COMMAND,
+          args: [ANTIGRAVITY_PLUGIN_ROOT + "/" + SERVER_BUNDLE, AGENT_FLAG, row.id],
+          tools: ANTIGRAVITY_EAGER_TOOLS as unknown as JsonObject,
+        },
+      },
+    }],
+    [HOOKS_JSON_FILE, antigravityShape(pluginRow, hookCmd)],
+  ];
+}
+
 const OUT_PACKAGE_JSON = "package.json";
 const PI_EXTENSION = "./pi/index.js";
 const PI_SKILLS = "./pi/skills"; // D-HQ-SKILLS-1: pi's own rendered copy
@@ -248,7 +301,7 @@ const NODE_ENGINE = ">=" + NODE_MIN; // D1, the runtime check constant (D-PKG-ME
 // D1 "files = the release tree": every top-level name build.mjs writes, except package.json (npm always packs it).
 // build.mjs assertOutTree fails the build when the real tree and this list differ.
 export const OUT_FILES: readonly string[] = [
-  ".claude-plugin", CODEX_PLUGIN_DIR, ZCODE_PLUGIN_DIR, CLI_BUNDLE, "codex", "copilot", "fixtures", "gemini-extension.json", HOOK_BUNDLE, HOOKS_DIR, "omp", "opencode", "pi",
+  ANTIGRAVITY_PLUGIN_DIR, ".claude-plugin", CODEX_PLUGIN_DIR, ZCODE_PLUGIN_DIR, CLI_BUNDLE, "codex", "copilot", "fixtures", "gemini-extension.json", HOOK_BUNDLE, HOOKS_DIR, HOOKS_JSON_FILE, ANTIGRAVITY_MCP_FILE, "omp", "opencode", "pi",
   "qwen-extension.json", "run.mjs", "search.mjs", SERVER_BUNDLE, "skills", RELEASE_SUMS_FILE, "README.md", "LICENSE", // D-NPM-README-1
 ].slice().sort();
 // D-RN-REPO-1: npm provenance rejects a publish (E422) unless repository.url names the source repo. This is the
@@ -333,6 +386,7 @@ export function generateManifests(outDir: string, version: string = DEV_VERSION,
     }
     if (row.id === "codex") files.push(...codexPlugin(row, version));
     if (row.id === "zcode") files.push(...zcodePlugin(row, version));
+    if (row.id === "antigravity") files.push(...antigravityPlugin(row, version));
     const shape = HOOK_SHAPES[row.id];
     if (shape !== null) files.push([hookFile(row), shape(row)]);
   }

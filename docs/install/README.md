@@ -1,6 +1,6 @@
 # Install context-mode v2
 
-context-mode supports 11 agents. Use your agent's own install command. Each line below is the native command, then the native update command. After it, run the check: `context-mode doctor`.
+context-mode supports 12 agents. Use your agent's own install command. Each line below is the native command, then the native update command. After it, run the check: `context-mode doctor`.
 
 The agents with no install command of their own use the npm route: `npm i -g context-mode`, then `context-mode setup`.
 
@@ -14,6 +14,7 @@ The agents with no install command of their own use the npm route: `npm i -g con
 
 | Agent | Install | Update |
 |---|---|---|
+| Antigravity | `agy plugin install https://github.com/calvinxxw/context-mode` | `agy plugin uninstall context-mode`, then reinstall |
 | Claude Code | `claude plugin marketplace add mksglu/context-mode`, then `claude plugin install context-mode@context-mode` | `claude plugin update context-mode@context-mode` |
 | Codex | `codex plugin marketplace add mksglu/context-mode`, then `codex plugin add context-mode@context-mode` | `codex plugin marketplace upgrade context-mode` |
 | Gemini CLI | `gemini extensions install https://github.com/mksglu/context-mode` | `gemini extensions update context-mode` |
@@ -76,6 +77,7 @@ Each page gives one command, what setup changes, how to check it, how to remove 
 
 | Agent | Page | What setup runs | Checked in a clean HOME |
 |---|---|---|---|
+| Antigravity | [antigravity.md](./antigravity.md) | `agy plugin install` or writes `~/.gemini/config/{mcp_config,hooks}.json`, skills | yes, 1.5.14 |
 | Claude Code | [claude-code.md](./claude-code.md) | `claude plugin marketplace add` + `plugin install` | yes, 2.1.309 |
 | Codex | [codex.md](./codex.md) | writes `~/.codex/config.toml`, `~/.codex/hooks.json`, skills | yes, 0.164.0 |
 | Copilot CLI | [copilot-cli.md](./copilot-cli.md) | `copilot mcp add`, writes hooks and skills | yes, 1.0.103 |
@@ -100,6 +102,7 @@ Every agent gets hooks and the skills `/ctx-doctor`, `/ctx-stats`, `/ctx-upgrade
 
 | Agent | Hook channel | Skills | Effect | Live saving (bytes off -> v2) | Date | Host version | Doc-verified |
 |---|---|---|---|---|---|---|---|
+| Antigravity | plugin `hooks.json` (or `~/.gemini/config/hooks.json`) | plugin `skills/` (or `~/.gemini/config/skills`) | D | pass: PreToolUse deny + redirect | 2026-11-23 | 1.5.14 | yes: `agy plugin validate` + live hook |
 | Claude Code | plugin `hooks/claude-code.json` | plugin `skills/` | R | pass: 196,149 -> 286 | 2026-10-26 | 2.1.309 | yes |
 | Codex | `~/.codex/hooks.json` + trust tables in `config.toml` | `~/.codex/skills` | D | pass: 217,858 -> 392 | 2026-10-26 | 0.164.0 | partly: the docs page has no skills directory |
 | Gemini CLI | extension `hooks/hooks.json` | extension `skills/` | R | pass: 168,875 -> 343 | 2026-10-26 | 0.65.0 | partly: AfterTool deny text names `ctx_search`, host name is `mcp_context-mode_ctx_search` |
@@ -137,7 +140,7 @@ If you update with npm yourself (`npm i -g context-mode`), most agents need noth
 | Agent | After `npm i -g` |
 |---|---|
 | Claude Code | Claude Code runs its own copy of the plugin. Run `context-mode setup --repair` (it runs `claude plugin marketplace update context-mode` and `claude plugin update context-mode@context-mode` in the profile it found), or run those two commands yourself. `context-mode doctor` fails with this fix line while the copy is old. |
-| Codex, Copilot CLI, Gemini CLI, Kiro, OMP, OpenCode, Pi, Qwen Code, VS Code, Z Code | Nothing. Restart the agent. |
+| Antigravity, Codex, Copilot CLI, Gemini CLI, Kiro, OMP, OpenCode, Pi, Qwen Code, VS Code, Z Code | Nothing. Restart the agent. |
 
 Run `context-mode doctor` to check. It changes nothing.
 

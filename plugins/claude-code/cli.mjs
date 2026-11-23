@@ -25,7 +25,7 @@ function readReplaceTrigger(raw) {
 }
 var REPLACE_TRIGGER_BYTES = readReplaceTrigger(process.env[REPLACE_TRIGGER_ENV]);
 var RANGE_READ_TOOLS = Object.freeze(["Read", "view"]);
-var READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range"]);
+var READ_RANGE_KEYS = Object.freeze(["offset", "limit", "view_range", "StartLine", "EndLine"]);
 var SKILL_LOAD_TOOLS = Object.freeze(["Skill"]);
 var WEIGHT = Object.freeze({ toolerr: 900, decision: 700, prompt: 500, edit: 400, index: 200 });
 var DECAY_X1000 = Object.freeze([
@@ -200,10 +200,10 @@ var HOOK_FAIL_CWD_KEYS = Object.freeze(["cwd", "directory"]);
 var HOOK_FAIL_PRE_EVENTS = Object.freeze(["pretooluse", "beforetool", "tool_call", "execute.before", "tool.execute.before"]);
 var HOOK_FAULT_STAGES = Object.freeze(["decode", "project", "policy", "store", "encode"]);
 var HOOK_FAIL_TOOLS = Object.freeze({
-  shell: Object.freeze(["Bash", "bash", "shell"]),
-  read: Object.freeze(["Read", "read_file"]),
+  shell: Object.freeze(["Bash", "bash", "shell", "run_command"]),
+  read: Object.freeze(["Read", "read_file", "view_file"]),
   grep: Object.freeze(["Grep", "grep_search"]),
-  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch"])
+  fetch: Object.freeze(["WebFetch", "web_fetch", "fetch", "read_url_content"])
 });
 var HOOK_FAIL_REDIRECT = Object.freeze({
   read: "Read the file in parts with offset and limit, or process it with ctx_execute(language, code); only what you print comes back.",
@@ -227,7 +227,7 @@ var SHELL_DUMP_COMMANDS = Object.freeze(["cat", "head", "tail", "sed", "less", "
 var DUMP_COUNT_COMMANDS = Object.freeze(["head", "tail"]);
 var DUMP_COUNT_FLAGS = Object.freeze(["-n", "-c", "--lines", "--bytes"]);
 var SED_QUIET_FLAGS = Object.freeze(["-n", "--quiet", "--silent"]);
-var READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath"]);
+var READ_PATH_KEYS = Object.freeze(["file_path", "absolute_path", "path", "filePath", "AbsolutePath", "Path"]);
 var READ_MEDIA_TYPES = Object.freeze({
   png: { exts: [".png"], sig: [{ at: 0, bytes: [137, 80, 78, 71, 13, 10, 26, 10] }] },
   jpeg: { exts: [".jpg", ".jpeg"], sig: [{ at: 0, bytes: [255, 216, 255] }] },
@@ -245,6 +245,7 @@ var READ_MEDIA_BY_AGENT = Object.freeze({
   gemini: READ_IMAGES_AND_PDF,
   qwen: READ_IMAGES_AND_PDF,
   opencode: READ_IMAGES_AND_PDF,
+  antigravity: READ_IMAGES_AND_PDF,
   pi: READ_IMAGES,
   omp: READ_IMAGES,
   vscode: READ_IMAGES,
@@ -325,8 +326,10 @@ var AGENT_HOME_DIR = Object.freeze({
   zcode: [".zcode"],
   pi: [".pi"],
   opencode: [".config", "opencode"],
-  omp: [".omp"]
+  omp: [".omp"],
   // ADR-0026: OMP data and plugins live under ~/.omp
+  antigravity: [".gemini", "config"]
+  // Google Antigravity unified global config dir (App, CLI, IDE)
 });
 var UPGRADE_MODES = Object.freeze(["upgrade", "uninstall"]);
 var GIT_CLONE_ARGS = Object.freeze(["clone", "--depth", "1", "--branch"]);
@@ -350,16 +353,6 @@ var OPS_SPLIT_FILES = Object.freeze([
 ]);
 var unsupported = (h2) => Object.freeze(h2);
 var UNSUPPORTED_HOSTS = Object.freeze([
-  unsupported({
-    id: "antigravity",
-    name: "Antigravity",
-    clientNames: ["antigravity", "antigravity-client", "antigravity-cli", "agy"],
-    envVars: ["ANTIGRAVITY_CLI_ALIAS"],
-    pluginPaths: [[".gemini", "config", "plugins"], [".gemini", "antigravity", "plugins"], [".gemini", "antigravity-cli", "plugins"], [".gemini", "antigravity-ide", "plugins"]],
-    configDirs: [".gemini/antigravity", ".gemini/antigravity-cli", ".gemini/config"],
-    binaries: ["agy"],
-    source: "v1.0.169:src/adapters/client-map.ts:15-17; detect.ts:156,481-483; #1340"
-  }),
   unsupported({
     id: "cursor",
     name: "Cursor",
@@ -433,8 +426,9 @@ var HOOK_HOST_FILE = Object.freeze({
   zcode: { root: "home", file: [".zcode", "cli", "config.json"], key: ["hooks", "events"], shape: "zcode", timeoutKey: "timeoutMs", matcher: true },
   pi: null,
   opencode: null,
-  omp: null
+  omp: null,
   // ADR-0026: in-process, no hook file
+  antigravity: { root: "home", file: [".gemini", "config", "hooks.json"], key: [SERVER_KEY], shape: "antigravity", timeoutKey: "timeout", matcher: true }
 });
 var TOOL_HOOK_EVENTS = Object.freeze(["PreToolUse", "PostToolUse"]);
 var KIRO_TOOL_MATCHERS = Object.freeze([["@mcp", "mcp"], ["shell", "shell"]]);
@@ -460,7 +454,8 @@ var UPGRADE_HOST_COMMAND = Object.freeze({
   "copilot-cli": "npm i -g context-mode && context-mode setup --agents copilot-cli",
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
-  zcode: "npm i -g context-mode && context-mode setup --agents zcode"
+  zcode: "npm i -g context-mode && context-mode setup --agents zcode",
+  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode"
 });
 var PI_GIT_PACKAGE = "git:github.com/mksglu/context-mode@release";
 var OPENCODE_GIT_SPEC = "git+https://github.com/mksglu/context-mode.git#release";
@@ -602,6 +597,14 @@ var CODEX_OMIT_TOOLS_FROM_FIELD = "omit_tools_from";
 var CODEX_OMIT_DEFERRED = Object.freeze(["deferred"]);
 var CODEX_APPROVAL_MODE_FIELD = "default_tools_approval_mode";
 var CODEX_APPROVAL_APPROVE = "approve";
+var ANTIGRAVITY_EAGER_TOOLS = Object.freeze({
+  ctx_execute: Object.freeze({ eager: true }),
+  ctx_batch: Object.freeze({ eager: true }),
+  ctx_index: Object.freeze({ eager: true }),
+  ctx_search: Object.freeze({ eager: true }),
+  ctx_resume: Object.freeze({ eager: true })
+});
+var ANTIGRAVITY_MCP_FILE = "mcp_config.json";
 var OWN_MCP_ENTRY = Object.freeze({
   codex: { file: [".codex", "config.toml"], key: ["mcp_servers", SERVER_KEY], fields: { [CODEX_OMIT_TOOLS_FROM_FIELD]: CODEX_OMIT_DEFERRED, [CODEX_APPROVAL_MODE_FIELD]: CODEX_APPROVAL_APPROVE } },
   vscode: { file: [VSCODE_MCP_FILE], key: ["servers", SERVER_KEY] },
@@ -611,6 +614,11 @@ var OWN_MCP_ENTRY = Object.freeze({
     key: ["mcp", "servers", SERVER_KEY],
     fields: { type: "stdio", enabled: true, timeoutMs: EXEC_TIMEOUT_MS },
     also: [[ZCODE_MCP_FEATURE_KEY, true]]
+  },
+  antigravity: {
+    file: [".gemini", "config", ANTIGRAVITY_MCP_FILE],
+    key: ["mcpServers", SERVER_KEY],
+    fields: { tools: ANTIGRAVITY_EAGER_TOOLS }
   }
 });
 var REPORT_ENV_ENUMS = Object.freeze({
@@ -683,7 +691,8 @@ var NATIVE_INSTALL = Object.freeze({
   "copilot-cli": ["npm i -g context-mode", "context-mode setup --agents copilot-cli"],
   vscode: ["npm i -g context-mode", "context-mode setup --agents vscode"],
   kiro: ["npm i -g context-mode", "context-mode setup --agents kiro"],
-  zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"]
+  zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"],
+  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode"]
 });
 var ISSUE_FORM_URL = `https://github.com/${ISSUE_REPO_SLUG}/issues/new?template=${ISSUE_FORM_FILE}`;
 
@@ -1522,6 +1531,201 @@ function encode10(ev, d, _extra) {
   }
 }
 
+// src/adapters/antigravity.ts
+var TOOL_NAME_PREFIX11 = "mcp_context-mode_";
+var PLUGIN_TOOL_NAME_PREFIX2 = "mcp_context-mode_context-mode_";
+var UNDERSCORE_TOOL_PREFIX = "mcp_context_mode_";
+var SHELL_TOOL_NAMES6 = Object.freeze(["run_command"]);
+var READ_TOOL_NAMES2 = Object.freeze(["view_file", "read_file"]);
+var GREP_TOOL_NAMES = Object.freeze(["grep_search"]);
+var WEBFETCH_TOOL_NAMES2 = Object.freeze(["read_url_content"]);
+var EDIT_TOOL_NAMES = Object.freeze([
+  "write_to_file",
+  "replace_file_content",
+  "multi_replace_file_content",
+  "write_file",
+  "edit_file"
+]);
+var EVENT_MAP = Object.freeze({
+  SessionStart: "SessionStart",
+  UserPromptSubmit: "PreInvocation",
+  PreToolUse: "PreToolUse",
+  PostToolUse: "PostToolUse"
+});
+var ANTIGRAVITY_EVENTS = {
+  SessionStart: "SessionStart",
+  PreInvocation: "UserPromptSubmit",
+  UserPromptSubmit: "UserPromptSubmit",
+  PreToolUse: "PreToolUse",
+  PostToolUse: "PostToolUse",
+  PostInvocation: "Stop",
+  Stop: "Stop"
+};
+var NATIVE_TO_CANONICAL8 = {
+  run_command: "Bash",
+  view_file: "Read",
+  read_file: "Read",
+  grep_search: "Grep",
+  read_url_content: "WebFetch",
+  write_to_file: "Write",
+  write_file: "Write",
+  replace_file_content: "Edit",
+  multi_replace_file_content: "Edit",
+  edit_file: "Edit",
+  ask_question: "AskUserQuestion"
+};
+var CALL_MCP_TOOL = "call_mcp_tool";
+var OWN_SERVER_NAMES = ["context-mode", "context-mode_context-mode"];
+var OWN_TOOL_PREFIX2 = "ctx_";
+var MCP_PREFIX4 = "mcp_";
+var MCP_SEP4 = "_";
+var EMPTY_JSON = { stdout: "{}", exitCode: 0 };
+var ALLOW_PRE_TOOL = { stdout: JSON.stringify({ decision: "allow" }), exitCode: 0 };
+function own2(p3, key) {
+  return Object.hasOwn(p3, key) ? p3[key] : void 0;
+}
+function isRecord3(v) {
+  return typeof v === "object" && v !== null && !Array.isArray(v);
+}
+function str(v) {
+  return typeof v === "string" && v !== "" ? v : void 0;
+}
+function canonicalName6(name, args) {
+  if (name === CALL_MCP_TOOL) {
+    const server = str(own2(args, "ServerName"));
+    const tool = str(own2(args, "ToolName"));
+    if (server !== void 0 && tool !== void 0) {
+      if (OWN_SERVER_NAMES.includes(server) && tool.startsWith(OWN_TOOL_PREFIX2)) return tool;
+      return "mcp:" + server + ":" + tool;
+    }
+    return name;
+  }
+  if (name.startsWith(PLUGIN_TOOL_NAME_PREFIX2)) return name.slice(PLUGIN_TOOL_NAME_PREFIX2.length);
+  if (name.startsWith(TOOL_NAME_PREFIX11)) return name.slice(TOOL_NAME_PREFIX11.length);
+  if (name.startsWith(UNDERSCORE_TOOL_PREFIX)) return name.slice(UNDERSCORE_TOOL_PREFIX.length);
+  if (Object.hasOwn(NATIVE_TO_CANONICAL8, name)) return NATIVE_TO_CANONICAL8[name];
+  if (!name.startsWith(MCP_PREFIX4)) return name;
+  const rest = name.slice(MCP_PREFIX4.length);
+  const sep3 = rest.indexOf(MCP_SEP4);
+  if (sep3 <= 0 || sep3 === rest.length - 1) return name;
+  return "mcp:" + rest.slice(0, sep3) + ":" + rest.slice(sep3 + MCP_SEP4.length);
+}
+function normalizeInput(name, canonical, args) {
+  if (name === CALL_MCP_TOOL) {
+    const inner = own2(args, "Arguments");
+    if (isRecord3(inner)) return { ...args, ...inner };
+    return args;
+  }
+  const out2 = { ...args };
+  if (canonical === "Bash") {
+    const cmd = str(own2(args, "CommandLine")) ?? str(own2(args, "command"));
+    if (cmd !== void 0 && own2(out2, "command") === void 0) out2.command = cmd;
+    const desc = str(own2(args, "toolSummary")) ?? str(own2(args, "description"));
+    if (desc !== void 0 && own2(out2, "description") === void 0) out2.description = desc;
+  } else if (canonical === "Read") {
+    const fp = str(own2(args, "AbsolutePath")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    if (fp !== void 0 && own2(out2, "file_path") === void 0) out2.file_path = fp;
+    const start = own2(args, "StartLine");
+    if (start !== void 0 && start !== null && own2(out2, "offset") === void 0) out2.offset = start;
+    const end = own2(args, "EndLine");
+    if (end !== void 0 && end !== null && own2(out2, "limit") === void 0) out2.limit = end;
+  } else if (canonical === "Grep") {
+    const pat = str(own2(args, "Query")) ?? str(own2(args, "Pattern"));
+    if (pat !== void 0 && own2(out2, "pattern") === void 0) out2.pattern = pat;
+    const sp = str(own2(args, "SearchPath"));
+    if (sp !== void 0 && own2(out2, "path") === void 0) out2.path = sp;
+  } else if (canonical === "WebFetch") {
+    const url = str(own2(args, "Url")) ?? str(own2(args, "url"));
+    if (url !== void 0 && own2(out2, "url") === void 0) out2.url = url;
+  } else if (canonical === "Write" || canonical === "Edit") {
+    const fp = str(own2(args, "TargetFile")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    if (fp !== void 0 && own2(out2, "file_path") === void 0) out2.file_path = fp;
+  }
+  return out2;
+}
+function cwdOf(p3) {
+  const direct = str(own2(p3, "cwd"));
+  if (direct !== void 0) return direct;
+  const wsPaths = own2(p3, "workspacePaths");
+  if (Array.isArray(wsPaths)) {
+    const first = wsPaths.find((x2) => typeof x2 === "string" && x2 !== "");
+    if (first !== void 0) return first;
+  }
+  const ws = own2(p3, "workspace");
+  if (isRecord3(ws)) {
+    const cur = str(own2(ws, "current_dir"));
+    if (cur !== void 0) return cur;
+  }
+  return "";
+}
+function readResult8(p3) {
+  const err2 = own2(p3, "error");
+  const isError = typeof err2 === "string" && err2 !== "";
+  const text2 = isError ? err2 : "";
+  return { isError, bytes: Buffer.byteLength(text2), text: text2 };
+}
+function decode11(raw) {
+  if (!isRecord3(raw)) throw new Error("antigravity: hook payload is not a JSON object");
+  const native = own2(raw, "hookEventName") ?? own2(raw, "hook_event_name");
+  const event = typeof native === "string" && Object.hasOwn(ANTIGRAVITY_EVENTS, native) ? ANTIGRAVITY_EVENTS[native] : void 0;
+  if (event === void 0) throw new Error("antigravity: unknown hook event " + String(native));
+  const sessionId = str(own2(raw, "conversationId")) ?? str(own2(raw, "session_id")) ?? str(own2(raw, "sessionId")) ?? "";
+  const ev = { event, agent: "antigravity", sessionId, cwd: cwdOf(raw) };
+  const inv = own2(raw, "invocationNum");
+  const step = own2(raw, "stepIdx");
+  if (typeof inv === "number" && Number.isSafeInteger(inv)) ev.turn = inv;
+  else if (typeof step === "number" && Number.isSafeInteger(step)) ev.turn = step;
+  if (event === "SessionStart") ev.source = "startup";
+  if (event === "UserPromptSubmit") {
+    const prompt = own2(raw, "lastUserInput") ?? own2(raw, "prompt");
+    if (typeof prompt === "string") ev.prompt = prompt;
+  }
+  if (event === "PreToolUse" || event === "PostToolUse") {
+    const tc = own2(raw, "toolCall");
+    const call = isRecord3(tc) ? tc : void 0;
+    const name = String((call ? own2(call, "name") : own2(raw, "tool_name")) ?? "");
+    const rawArgs = call ? own2(call, "args") : own2(raw, "tool_input");
+    const args = isRecord3(rawArgs) ? rawArgs : {};
+    const canonical = canonicalName6(name, args);
+    const tool = { name, canonicalName: canonical, input: normalizeInput(name, canonical, args) };
+    const id = str(call ? own2(call, "id") : own2(raw, "tool_use_id"));
+    if (id !== void 0) tool.callId = id;
+    ev.tool = tool;
+  }
+  if (event === "PostToolUse") ev.result = readResult8(raw);
+  return ev;
+}
+function encode11(ev, d, _extra) {
+  if (ev.event === "PostToolUse" || ev.event === "Stop") return EMPTY_JSON;
+  if (ev.event === "PreToolUse") {
+    if (d.kind === "deny") {
+      const reason = d.rewritten === void 0 ? d.reason : d.rewritten + "\n" + d.reason;
+      return { stdout: JSON.stringify({ decision: "deny", reason }), exitCode: 0 };
+    }
+    return ALLOW_PRE_TOOL;
+  }
+  if (ev.event === "SessionStart") {
+    if (d.kind === "hint") {
+      return { stdout: JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: d.text } }] }), exitCode: 0 };
+    }
+    return EMPTY_JSON;
+  }
+  if (ev.event === "UserPromptSubmit") {
+    if (d.kind === "hint") {
+      return { stdout: JSON.stringify({ injectSteps: [{ systemMessage: { systemMessage: d.text } }] }), exitCode: 0 };
+    }
+    if (d.kind === "deny") {
+      const reason = d.rewritten === void 0 ? d.reason : d.rewritten + "\n" + d.reason;
+      return {
+        stdout: JSON.stringify({ injectSteps: [{ errorMessage: { userMessage: reason } }], terminationBehavior: "terminate" }),
+        exitCode: 0
+      };
+    }
+    return EMPTY_JSON;
+  }
+  return EMPTY_JSON;
+}
+
 // src/adapters/table.ts
 var CLAUDE_EVENTS = { SessionStart: "SessionStart", UserPromptSubmit: "UserPromptSubmit", PreToolUse: "PreToolUse", PostToolUse: "PostToolUse" };
 var CLAUDE_TOOLS = { shell: ["Bash"], read: ["Read"], grep: ["Grep"], webfetch: ["WebFetch"], edit: ["Write", "Edit", "NotebookEdit"] };
@@ -1742,6 +1946,31 @@ var ADAPTERS = Object.freeze([
     encode: encode9,
     checkPermission
     // D-OMP-FIRE-1: agent omp in rows
+  },
+  {
+    // Native Google Antigravity adapter (Antigravity App, Antigravity CLI `agy`, Antigravity IDE).
+    // PostToolUse does not receive tool output, so Antigravity is a deny+redirect host; PreInvocation carries recall.
+    id: "antigravity",
+    installMode: "hooks+mcp",
+    projectSource: "spawn-cwd",
+    toolNamePrefix: TOOL_NAME_PREFIX11,
+    nativeTools: {
+      shell: [...SHELL_TOOL_NAMES6],
+      read: [...READ_TOOL_NAMES2],
+      grep: [...GREP_TOOL_NAMES],
+      webfetch: [...WEBFETCH_TOOL_NAMES2],
+      edit: [...EDIT_TOOL_NAMES]
+    },
+    execReadOnlyHint: false,
+    eventMap: EVENT_MAP,
+    compactDelivery: "sessionstart",
+    compactSummary: "none",
+    hookTimeoutMs: HOOK_TIMEOUT_MS,
+    denyChannel: "deny-reason",
+    hookChannel: { kind: "home-file", path: ".gemini/config/hooks.json" },
+    skillChannel: { kind: "home-dir", path: ".gemini/config/skills" },
+    decode: decode11,
+    encode: encode11
   }
 ]);
 var BY_ID = new Map(ADAPTERS.map((r2) => [r2.id, r2]));
@@ -1754,7 +1983,7 @@ function getAdapter(id) {
 }
 
 // src/core/contracts/agents.ts
-var AGENT_IDS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp"];
+var AGENT_IDS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "antigravity"];
 
 // src/core/ops/unsupported-host.ts
 var SUPPORTED_AGENTS_LINE = `Supported agents: ${AGENT_IDS.join(", ")} (${SUPPORTED_AGENTS_DOCS_URL}).`;
@@ -5048,8 +5277,8 @@ function claudeProfileEnv(env, platform = process.platform) {
   return `${CLAUDE_CONFIG_DIR_ENV}='${dir.split("'").join(`'"'"'`)}' `;
 }
 function opencodeDirOf(env, home) {
-  const own2 = env[OPENCODE_CONFIG_DIR_ENV];
-  if (own2 !== void 0 && own2 !== "") return own2;
+  const own3 = env[OPENCODE_CONFIG_DIR_ENV];
+  if (own3 !== void 0 && own3 !== "") return own3;
   const xdg = env[XDG_CONFIG_HOME_ENV];
   if (xdg !== void 0 && xdg !== "") return join2(xdg, AGENT_HOME_DIR.opencode[AGENT_HOME_DIR.opencode.length - 1]);
   return join2(home, ...AGENT_HOME_DIR.opencode);
@@ -7388,13 +7617,13 @@ import { existsSync as existsSync4 } from "node:fs";
 import { dirname as dirname4, join as join6 } from "node:path";
 import { fileURLToPath } from "node:url";
 function bundleDirOf(argv1, moduleFile) {
-  const own2 = dirname4(argv1);
-  if (existsSync4(join6(own2, SERVER_ENTRY_FILE))) return own2;
+  const own3 = dirname4(argv1);
+  if (existsSync4(join6(own3, SERVER_ENTRY_FILE))) return own3;
   let dir = dirname4(moduleFile);
   for (; ; ) {
     if (existsSync4(join6(dir, SERVER_ENTRY_FILE))) return dir;
     const up = dirname4(dir);
-    if (up === dir) return own2;
+    if (up === dir) return own3;
     dir = up;
   }
 }
@@ -7618,8 +7847,8 @@ function lineIndent(text2, at) {
 }
 function indentUnit(root, clean) {
   if (root === null || root.kind !== "object" || root.members.length === 0) return JSON_INDENT_UNIT;
-  const own2 = lineIndent(clean, root.members[0].keyStart);
-  return own2 === "" ? JSON_INDENT_UNIT : own2;
+  const own3 = lineIndent(clean, root.members[0].keyStart);
+  return own3 === "" ? JSON_INDENT_UNIT : own3;
 }
 function render(value, unit, base) {
   return JSON.stringify(value, null, unit).split("\n").join("\n" + base);
@@ -8026,6 +8255,28 @@ function scanZcode(agentHome, out2) {
     if (c3.command.includes(V1_HOOK_COMMAND)) out2.push(finding(hooksFile, c3.path, V1_REASON.zcodeHook));
   }
 }
+function scanAntigravity(home, agentHome, out2) {
+  const hooksFile = join8(agentHome, HOOKS_JSON_FILE);
+  const doc = readJson(hooksFile);
+  if (isObj(doc)) {
+    for (const [name, group2] of Object.entries(doc)) {
+      if (!isObj(group2)) continue;
+      for (const [event, entries] of Object.entries(group2)) {
+        listOf(entries).forEach((entry2, i2) => {
+          const direct = commandOf(entry2);
+          if (direct !== null && isV1Hook(direct)) out2.push(finding(hooksFile, keyPath(name, event, i2), V1_REASON.hook));
+          if (isObj(entry2)) {
+            listOf(entry2[HOOKS_KEY]).forEach((inner, j2) => {
+              const cmd = commandOf(inner);
+              if (cmd !== null && isV1Hook(cmd)) out2.push(finding(hooksFile, keyPath(name, event, i2, HOOKS_KEY, j2), V1_REASON.hook));
+            });
+          }
+        });
+      }
+    }
+  }
+  dataDir(join8(home, ".gemini", V1_DATA_DIR_NAME), V1_REASON.dataDirShared, out2);
+}
 function firstTmpMatch(dir) {
   let handle;
   try {
@@ -8086,6 +8337,9 @@ function detectV1(agent, home, scope = {}) {
       break;
     case "zcode":
       scanZcode(agentHome, out2);
+      break;
+    case "antigravity":
+      scanAntigravity(home, agentHome, out2);
       break;
   }
   scanAll(home, scope.tmp ?? tmpdir(), out2);
@@ -8443,6 +8697,14 @@ function zcodeShape(row, cmd) {
   }
   return { hooks: { enabled: true, events: byEvent } };
 }
+function antigravityShape(row, cmd) {
+  const group2 = { enabled: true };
+  const handler = { ...entry(cmd), timeout: seconds(row) };
+  for (const [canonical, native] of events(row)) {
+    group2[native] = isToolEvent(canonical) ? [{ matcher: composeMatcher(row, canonical), hooks: [handler] }] : [handler];
+  }
+  return { [SERVER_KEY]: group2 };
+}
 var HOOK_SHAPES = {
   "claude-code": (row, cmd) => nestedShape(row, cmd, seconds(row), true),
   codex: (row, cmd) => nestedShape(row, cmd, seconds(row), true),
@@ -8454,8 +8716,9 @@ var HOOK_SHAPES = {
   zcode: zcodeShape,
   pi: null,
   opencode: null,
-  omp: null
+  omp: null,
   // ADR-0026: in-process like pi
+  antigravity: antigravityShape
 };
 
 // src/setup/registry.ts
@@ -8536,6 +8799,15 @@ var NATIVE_PLUGIN = {
     skillsVia: SKILLS_DIR_NAME,
     format: "json",
     enable: ["plugins", "enable", PLUGIN_ID]
+  },
+  antigravity: {
+    bin: "agy",
+    args: ["plugin", "list", "--json"],
+    plugin: SERVER_KEY,
+    hooksVia: "hooks.json",
+    skillsVia: SKILLS_DIR_NAME,
+    format: "agy-json",
+    enable: ["plugin", "enable", SERVER_KEY]
   }
 };
 var CELLAR_SEGMENT = "/Cellar/";
@@ -8566,6 +8838,16 @@ function hookCommandString(row) {
 }
 function golden(row, home) {
   const shell = row.nativeTools.shell?.[0];
+  if (row.id === "antigravity") {
+    return {
+      hookEventName: row.eventMap.PreToolUse ?? "PreToolUse",
+      conversationId: "context-mode-setup-verify",
+      cwd: home,
+      workspacePaths: [home],
+      stepIdx: 0,
+      toolCall: { id: "call_verify", name: shell ?? "ctx_execute", args: { CommandLine: "true" } }
+    };
+  }
   return {
     hook_event_name: row.eventMap.PreToolUse ?? "PreToolUse",
     session_id: "context-mode-setup-verify",
@@ -8576,15 +8858,15 @@ function golden(row, home) {
 }
 function configFor(ctx, id) {
   const [node, server, flag, agent] = serverCmd(ctx, id);
-  const own2 = OWN_MCP_ENTRY[id];
-  if (own2) {
-    const file = id === "vscode" ? ownMcpFileOf(id, own2.file, ctx.env, ctx.home) : agentPath(ctx, id, own2.file);
+  const own3 = OWN_MCP_ENTRY[id];
+  if (own3) {
+    const file = id === "vscode" ? ownMcpFileOf(id, own3.file, ctx.env, ctx.home) : agentPath(ctx, id, own3.file);
     const format = file.endsWith(".toml") ? "toml" : id === "vscode" ? "jsonc" : "json";
-    const also = own2.also?.map(([k, v]) => [k, v]);
+    const also = own3.also?.map(([k, v]) => [k, v]);
     const codexHome = id === "codex" ? ctx.env[CODEX_HOME_ENV2] : void 0;
     const base = ownMcpValue(id, node, server);
     const value = codexHome !== void 0 && codexHome !== "" ? { ...base, [MCP_ENV_FIELD]: { [CODEX_HOME_ENV2]: codexHome } } : base;
-    return { file, format, key: own2.key, value, ...also ? { also } : {} };
+    return { file, format, key: own3.key, value, ...also ? { also } : {} };
   }
   if (id === "opencode") {
     return {
@@ -8799,8 +9081,8 @@ function geminiSettingsGate(env, home, cwd) {
   }
   for (const s of srcs) {
     const off = hostConfigValueAt(s.doc, ["hooksConfig", "disabled"]);
-    const own2 = Array.isArray(off) ? off.find(ownHookEntry) : void 0;
-    if (own2 !== void 0) return `${s.file}: hooksConfig.disabled lists the context-mode hook (${own2}), so gemini skips it; remove that entry`;
+    const own3 = Array.isArray(off) ? off.find(ownHookEntry) : void 0;
+    if (own3 !== void 0) return `${s.file}: hooksConfig.disabled lists the context-mode hook (${own3}), so gemini skips it; remove that entry`;
   }
   return void 0;
 }
@@ -9442,6 +9724,18 @@ function hookSample(id, cwd, text2) {
     case "kiro":
     case "zcode":
       return { effect, payload: { hook_event_name: event, session_id: SAMPLE_SESSION, cwd, tool_name: tool, tool_input: command } };
+    case "antigravity":
+      return {
+        effect,
+        payload: {
+          hookEventName: event,
+          conversationId: SAMPLE_SESSION,
+          cwd,
+          workspacePaths: [cwd],
+          stepIdx: 0,
+          toolCall: { id: "call_sample", name: tool, args: { CommandLine: SAMPLE_COMMAND } }
+        }
+      };
   }
 }
 function sampleVerdict(id, effect, text2, a2) {
@@ -9508,8 +9802,8 @@ function hostBin(bin, env, platform = process.platform) {
   const get = (k) => envValue(env, k, "win32");
   const shims = [];
   for (const dir of pathEntries(get("PATH") ?? "", platform)) {
-    const own2 = which(bin, { PATH: dir, ...get("PATHEXT") ? { PATHEXT: get("PATHEXT") } : {} }, platform);
-    for (const f2 of [own2, ...real2.extra.map((p3) => path14.join(dir, ...p3))]) {
+    const own3 = which(bin, { PATH: dir, ...get("PATHEXT") ? { PATHEXT: get("PATHEXT") } : {} }, platform);
+    for (const f2 of [own3, ...real2.extra.map((p3) => path14.join(dir, ...p3))]) {
       if (!f2 || !existsSync19(f2) || !statSync4(f2).isFile()) continue;
       const file = realpathSync10(f2);
       if (isNativeBinary(file) || owningPackage(path14.dirname(file)) === real2.pkg) return { file: f2, shims };
@@ -10160,13 +10454,13 @@ function skillsCheck(row, pkgDir) {
     const files = COMMAND_SKILLS.map((n3) => path14.join(pkgDir, s.via, n3, SKILL_FILE));
     const miss = files.filter((f2) => !existsSync19(f2));
     if (miss.length) return { name: "skills", ok: false, detail: `missing ${miss.join(", ")}` };
-    const own2 = getAdapter(row.id).toolNamePrefix + SKILL_TOOL_STEM;
-    const foreign = [...new Set(ADAPTERS.map((r2) => r2.toolNamePrefix + SKILL_TOOL_STEM))].filter((n3) => n3 !== SKILL_TOOL_STEM && n3 !== own2);
+    const own3 = getAdapter(row.id).toolNamePrefix + SKILL_TOOL_STEM;
+    const foreign = [...new Set(ADAPTERS.map((r2) => r2.toolNamePrefix + SKILL_TOOL_STEM))].filter((n3) => n3 !== SKILL_TOOL_STEM && n3 !== own3);
     const bad2 = files.filter((f2) => {
       const t2 = readFileSync14(f2, "utf8");
-      return !t2.includes(own2) && foreign.some((n3) => t2.includes(n3));
+      return !t2.includes(own3) && foreign.some((n3) => t2.includes(n3));
     });
-    return { name: "skills", ok: bad2.length === 0, detail: bad2.length ? `${bad2.join(", ")} without the ${own2}* tool name` : void 0 };
+    return { name: "skills", ok: bad2.length === 0, detail: bad2.length ? `${bad2.join(", ")} without the ${own3}* tool name` : void 0 };
   }
   const bad = s.files.filter((f2) => readRaw(f2.file) !== (existsSync19(f2.src) ? renderSkill(readFileSync14(f2.src, "utf8"), s.prefixes) : void 0));
   return { name: "skills", ok: bad.length === 0, detail: bad.length ? `${bad.map((f2) => f2.file).join(", ")} missing or without the ${s.prefixes.join(" / ") || "plain"} tool prefix` : void 0 };
@@ -10221,8 +10515,25 @@ function jsonState(n3, text2) {
   if (!isObj5(mine)) return none;
   if (mine.enabled !== true) return { state: "disabled", workspaceOff: false };
   const hooks = Array.isArray(mine.hookDetails) ? mine.hookDetails : [];
-  const own2 = `${AGENT_FLAG} ${n3.bin}`;
-  const hookGate = hooks.some((h2) => isObj5(h2) && typeof h2.command === "string" && h2.command.includes(own2)) ? void 0 : `the installed ${n3.plugin} runs no ${own2} hook; run: ${n3.bin} plugins update ${n3.plugin}`;
+  const own3 = `${AGENT_FLAG} ${n3.bin}`;
+  const hookGate = hooks.some((h2) => isObj5(h2) && typeof h2.command === "string" && h2.command.includes(own3)) ? void 0 : `the installed ${n3.plugin} runs no ${own3} hook; run: ${n3.bin} plugins update ${n3.plugin}`;
+  return { state: "enabled", workspaceOff: false, hookGate };
+}
+function agyJsonState(n3, text2) {
+  const none = { state: void 0, workspaceOff: false };
+  let doc;
+  try {
+    doc = JSON.parse(text2);
+  } catch {
+    return none;
+  }
+  const mine = Array.isArray(doc) ? doc.find((p3) => isObj5(p3) && p3.name === n3.plugin) : void 0;
+  if (!isObj5(mine)) return none;
+  if (mine.enabled !== true) return { state: "disabled", workspaceOff: false };
+  const pluginPath = typeof mine.path === "string" ? mine.path : void 0;
+  const hooksText = pluginPath ? readOr(path14.join(pluginPath, n3.hooksVia)) : void 0;
+  const own3 = `${AGENT_FLAG} antigravity`;
+  const hookGate = hooksText !== void 0 && hooksText.includes(own3) ? void 0 : `the installed ${n3.plugin} plugin runs no ${own3} hook; reinstall with: ${NATIVE_INSTALL.antigravity[0]}`;
   return { state: "enabled", workspaceOff: false, hookGate };
 }
 function unlistedExtension(n3, env, home, out2, status) {
@@ -10310,6 +10621,7 @@ function nativeState(row, env, home) {
   }
   if (r2.status !== 0) return none;
   if (n3.format === "json") return jsonState(n3, `${r2.stdout}`);
+  if (n3.format === "agy-json") return agyJsonState(n3, `${r2.stdout}`);
   return { state: codexJsonState(n3, `${r2.stdout}`), workspaceOff: false };
 }
 function nativeRow(row, n3) {
@@ -10370,7 +10682,7 @@ async function nativeResult(row, ctx, apply2) {
   } else res.checks = await verifyRow(nativeRow(row, n3), ctx);
   if (n3.hookTrust) res.checks = withHookTrust(res.checks, hooks, !!apply2?.dryRun);
   if (n3.format === "extension") res.checks = withHookGate(res.checks, geminiGate(n3, ctx, workspaceOff));
-  if (n3.format === "json") res.checks = withHookGate(res.checks, hookGate);
+  if (n3.format === "json" || n3.format === "agy-json") res.checks = withHookGate(res.checks, hookGate);
   const bad = res.checks.filter((c3) => !c3.ok);
   if (bad.length) {
     res.status = "FAIL";
@@ -10403,7 +10715,7 @@ function codexCacheEdits(row, found) {
   const h2 = row.hookInstall;
   if (h2.kind === "file") planJsonKeys(row, edits, h2.file, "json", (doc) => {
     if (!isObj5(doc.hooks)) return [];
-    const own2 = (x2) => {
+    const own3 = (x2) => {
       const hit = isObj5(x2) && isOwnHookCommand(x2.command, row.id);
       if (hit) found.push(`${h2.file}: ${String(x2.command)}`);
       return hit;
@@ -10415,9 +10727,9 @@ function codexCacheEdits(row, found) {
         continue;
       }
       const kept = groups.flatMap((g2) => {
-        if (own2(g2)) return [];
+        if (own3(g2)) return [];
         if (!isObj5(g2) || !Array.isArray(g2.hooks) || !g2.hooks.length) return [g2];
-        const inner = g2.hooks.filter((x2) => !own2(x2));
+        const inner = g2.hooks.filter((x2) => !own3(x2));
         return inner.length ? [{ ...g2, hooks: inner }] : [];
       });
       if (kept.length || !groups.length) hooks[ev] = kept;
@@ -11423,6 +11735,8 @@ var SERVER_FILE = "server.mjs";
 var HOOK_FILE = "hook.mjs";
 var PACKAGE_FILE = "package.json";
 var V1_PLATFORM_AGENT = Object.freeze({
+  antigravity: "antigravity",
+  "antigravity-cli": "antigravity",
   "claude-code": "claude-code",
   codex: "codex",
   "copilot-cli": "copilot-cli",

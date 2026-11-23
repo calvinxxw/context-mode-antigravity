@@ -37,6 +37,9 @@ const AGENT_FILES = Object.freeze({
   ".codex-plugin/": "codex",
   ".agents/plugins/": "codex",
   ".claude-plugin/": "claude-code",
+  ".antigravity-plugin/": "antigravity",
+  "mcp_config.json": "antigravity",
+  "hooks.json": "antigravity",
 });
 // plugins/claude-code/<dir>/ of one agent.
 const PLUGIN_DIR_ALIASES = Object.freeze({ copilot: "copilot-cli" });
@@ -46,7 +49,7 @@ const NPM_GLOBAL = "npm i -g ";
 const ROWS = agentRows();
 const ROW_BY_ID = new Map(ROWS.map((r) => [r.id, r]));
 // GitHub agents: the install command names this repo (marketplace add, extensions install); the rest install from npm.
-const GITHUB_AGENTS = Object.freeze(AGENT_IDS.filter((id) => (ROW_BY_ID.get(id)?.cmds.install ?? []).some((c) => c.includes(ISSUE_REPO_SLUG))));
+const GITHUB_AGENTS = Object.freeze(AGENT_IDS.filter((id) => (ROW_BY_ID.get(id)?.cmds.install ?? []).some((c) => c.includes(ISSUE_REPO_SLUG) || c.includes("https://github.com/"))));
 const PACKAGE_HOOKS = new Map(ADAPTERS.filter((a) => a.hookChannel.kind === "package").map((a) => [a.hookChannel.path, a.id]));
 
 function agentOfName(base) {
