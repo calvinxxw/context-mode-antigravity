@@ -1065,6 +1065,7 @@ export const ANTIGRAVITY_EAGER_TOOLS = Object.freeze({
 });
 export const ANTIGRAVITY_PLUGIN_ROOT_ENV = "PLUGIN_ROOT";
 export const ANTIGRAVITY_MCP_FILE = "mcp_config.json";
+export const ANTIGRAVITY_CONTEXT_FILE = "antigravity-context.json";
 export const OWN_MCP_ENTRY: Readonly<Partial<Record<AgentId, OwnMcpEntry>>> = Object.freeze({
   codex: { file: [".codex", "config.toml"], key: ["mcp_servers", SERVER_KEY], fields: { [CODEX_OMIT_TOOLS_FROM_FIELD]: CODEX_OMIT_DEFERRED, [CODEX_APPROVAL_MODE_FIELD]: CODEX_APPROVAL_APPROVE } },
   vscode: { file: [VSCODE_MCP_FILE], key: ["servers", SERVER_KEY] },

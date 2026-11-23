@@ -633,8 +633,8 @@ describe("ADR-0014 §1 ctx_doctor answers when the project does not resolve, and
     await promisify(execFile)(process.execPath, [path.join(REPO, "build", "build.mjs"), "--out", bundleDir], { encoding: "utf8" });
   });
   after(() => rmSync(home, { recursive: true, force: true }));
-  async function call(agent, clientName, name, { withRoots = false } = {}) {
-    const env = { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", ...(agent === "antigravity" ? { PLUGIN_ROOT: bundleDir } : {}) };
+  async function call(agent, clientName, name, { withRoots = false, extraEnv = {}, args = {} } = {}) {
+    const env = { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", ...(agent === "antigravity" ? { PLUGIN_ROOT: bundleDir } : {}), ...extraEnv };
     const opts = {
       cwd: bundleDir,
       ...(withRoots ? { onRequest: (method) => (method === "roots/list" ? { roots: [{ uri: pathToFileURL(workspaceDir).href }] } : undefined) } : {}),
@@ -647,7 +647,7 @@ describe("ADR-0014 §1 ctx_doctor answers when the project does not resolve, and
         clientInfo: { name: clientName, version: "1.5.14" },
       });
       client.notify("notifications/initialized", {});
-      const r = await client.request("tools/call", { name, arguments: {} });
+      const r = await client.request("tools/call", { name, arguments: args });
       return { isError: r.isError === true, text: r.content.map((c) => c.text).join("") };
     } finally {
       await client.close();
@@ -669,6 +669,70 @@ describe("ADR-0014 §1 ctx_doctor answers when the project does not resolve, and
     const stats = await call("antigravity", "antigravity-cli", "ctx_stats");
     assert.equal(stats.isError, true, stats.text);
     assert.ok(stats.text.includes("Project source spawn-cwd is missing. Fix: run ctx_doctor."), stats.text);
+  });
+
+  test("[D-1410-DOCTOR-NO-PROJECT-1] Antigravity spawned in PLUGIN_ROOT without roots resolves workspace and sessionId via hook handoff, immune to D5 probe pollution", async () => {
+    const dataDir = realpathSync(mkdtempSync(path.join(tmpdir(), "cm-agy-handoff-")));
+    const otherDir = realpathSync(mkdtempSync(path.join(tmpdir(), "cm-agy-probe-")));
+    const convId = "agy-live-conv-1234";
+    const hookEnv = { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", PLUGIN_ROOT: bundleDir, [C.DATA_DIR_ENV]: dataDir };
+    try {
+      // 1. PreInvocation hook writes antigravity-context.json and journals the user's prompt under conversationId.
+      const preInv = spawnSync(process.execPath, [path.join(bundleDir, "hook.mjs"), "--agent", "antigravity"], {
+        cwd: bundleDir,
+        env: hookEnv,
+        encoding: "utf8",
+        input: JSON.stringify({
+          hookEventName: "PreInvocation",
+          conversationId: convId,
+          cwd: workspaceDir,
+          workspacePaths: [workspaceDir],
+          lastUserInput: "verify antigravity handoff continuity",
+        }),
+      });
+      assert.equal(preInv.status, 0, preInv.stderr);
+      const ctxFile = path.join(dataDir, C.ANTIGRAVITY_CONTEXT_FILE);
+      assert.equal(existsSync(ctxFile), true, "PreInvocation must write antigravity-context.json");
+      const written = JSON.parse(readFileSync(ctxFile, "utf8"));
+      assert.equal(written.cwd, workspaceDir);
+      assert.equal(written.sessionId, convId);
+
+      // 2. Generic run_command PreToolUse (like D5 hook-roundtrip / hook-sample) must NOT overwrite handoff state.
+      const probe = spawnSync(process.execPath, [path.join(bundleDir, "hook.mjs"), "--agent", "antigravity"], {
+        cwd: bundleDir,
+        env: hookEnv,
+        encoding: "utf8",
+        input: JSON.stringify({
+          hookEventName: "PreToolUse",
+          conversationId: "dddddddd-dddd-dddd-dddd-dddddddddddd",
+          cwd: otherDir,
+          workspacePaths: [otherDir],
+          toolCall: { id: "t-probe", name: "run_command", args: { CommandLine: "echo probe" } },
+        }),
+      });
+      assert.equal(probe.status, 0, probe.stderr);
+      const afterProbe = JSON.parse(readFileSync(ctxFile, "utf8"));
+      assert.equal(afterProbe.cwd, workspaceDir);
+      assert.equal(afterProbe.sessionId, convId);
+
+      // 3. MCP server started in PLUGIN_ROOT without roots resolves workspaceDir and bridges convId.
+      const extraEnv = { [C.DATA_DIR_ENV]: dataDir };
+      const doc = await call("antigravity", "antigravity-cli", "ctx_doctor", { extraEnv });
+      assert.equal(doc.isError, false, doc.text);
+      assert.equal(doc.text.includes("Project source spawn-cwd is missing"), false, doc.text);
+      assert.match(doc.text, /\| D7 project and worktree \| PASS \|/, doc.text);
+      assert.match(doc.text, /\| D5 hook round trip \| PASS \|/, doc.text);
+
+      const stats = await call("antigravity", "antigravity-cli", "ctx_stats", { extraEnv });
+      assert.equal(stats.isError, false, stats.text);
+
+      const resume = await call("antigravity", "antigravity-cli", "ctx_resume", { extraEnv });
+      assert.equal(resume.isError, false, resume.text);
+      assert.ok(resume.text.includes("verify antigravity handoff continuity"), resume.text);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+      rmSync(otherDir, { recursive: true, force: true });
+    }
   });
 
   test("[D-1410-DOCTOR-NO-PROJECT-1] codex started in its plugin dir with no _meta workspace: ctx_doctor still answers", async () => {

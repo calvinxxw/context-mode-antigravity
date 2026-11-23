@@ -3,9 +3,10 @@
 // One path per event. Every failure fails open: allow, one stderr line. Never block the host.
 // D-CI-PERF-7: node:fs through getBuiltinModule; a static ESM import of node:fs also loads fs/promises, readline and streams.
 const { lstatSync, readFileSync } = process.getBuiltinModule("node:fs") as typeof import("node:fs");
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AGENT_IDS, type AgentId } from "../contracts/agents.ts";
 import {
+  ANTIGRAVITY_PLUGIN_ROOT_ENV,
   COMPACTED_META_PREFIX, COMPACT_POINTER_LINE, COMPACT_STATE_KEY, DECISION_OPTION_KEY, DECISION_SOURCE, DECISION_TOOL, EDIT_PATH_KEYS, EDIT_TOOLS, EXIT_CODE_LINE_PREFIX,
   OWN_TOOL_PREFIX, MCP_SERVER_TOOL_PREFIX, PLUGIN_CALL_ID_PREFIX, prefixToolNames, MAX_CHUNK_BYTES, REPLACE_CHUNK_BYTES, REPLACE_HANDLE_LINE, REPLACE_RETURN_BYTES, REPLACE_TRIGGER_BYTES, RANGE_READ_TOOLS, READ_PATH_KEYS, SKILL_LOAD_TOOLS, READ_RANGE_KEYS, SHAPE_RETURN_BYTES, PARSE_ERROR_DENY_LINE, PENDING_COMPACT_FLAG, PENDING_COMPACT_KEY,
   PENDING_COMPACT_META_PREFIX, POLICY_UNREADABLE_LINE, RECALL_KEY, RECALL_MAX_ROWS, RECALL_SEEN_META_PREFIX, RECALL_UNIT_CANDIDATES, RECALL_UNITS_SEEN_META_PREFIX, RESUME_HINT, RESUME_HINT_KEY, RUN_WRAPPER_FILE,
@@ -16,11 +17,13 @@ import {
 import type {
   AdapterRow, CanonicalHookEvent, Chunk, Decision, DbHandle, EventKind, HookOutput, ProjectContext, ToolCall, ToolResultInfo,
 } from "../contracts/types.ts";
+import { PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX } from "../../adapters/antigravity.ts";
 import { getAdapter, hasRecall, hasReplace } from "../../adapters/table.ts";
 import { decide } from "../policy/decide.ts";
 import { isOwnFile } from "../policy/own-file.ts";
 import { isSubagentCall, pickSubagentCase, toolSetForAgentType, type ToolSetSources } from "../policy/subagent.ts";
 import { readUserDeny } from "../policy/user-deny.ts";
+import { writeAntigravityContext } from "../project/antigravity-context.ts";
 import { resolveProject } from "../project/resolve.ts";
 import { claudeDirOf, homeDirOf } from "../project/config-dir.ts";
 import { isInside } from "../project/contain.ts";
@@ -66,7 +69,12 @@ export async function handleHook(agent: AgentId, raw: unknown, env: NodeJS.Proce
     process.stderr.write("hooks: unknown agent " + JSON.stringify(agent) + "\n"); // step 1, A22, D-FU-PS-1
     return EMPTY;
   }
-  const row = getAdapter(agent);
+  const baseRow = getAdapter(agent);
+  // Antigravity plugin hooks receive PLUGIN_ROOT and expose tools under mcp_context-mode_context-mode_ctx_*;
+  // global ~/.gemini/config/hooks.json runs without PLUGIN_ROOT and exposes mcp_context-mode_ctx_*.
+  const row = agent === "antigravity" && (env[ANTIGRAVITY_PLUGIN_ROOT_ENV] ?? "") !== ""
+    ? { ...baseRow, toolNamePrefix: ANTIGRAVITY_PLUGIN_TOOL_PREFIX }
+    : baseRow;
   // D-HNE-GUARD-1: every failure below ends in failureOutput (exit 0, this host's shape, tool table only) and a log line.
   const report = (stage: string, err: unknown, line?: string): void => {
     logHookError(env, agent, stage, err);
@@ -74,7 +82,7 @@ export async function handleHook(agent: AgentId, raw: unknown, env: NodeJS.Proce
   };
   const fail = (stage: string, err: unknown, line?: string): HookOutput => {
     report(stage, err, line);
-    return failureOutput(agent, raw, err);
+    return failureOutput(agent, raw, err, "", env);
   };
   if (nodeTooOld(process.version)) {
     // D-1370-OLDNODE-ALLOW-1 (#1370): the MCP server runs on this same node and is degraded (PRD §13: ctx_doctor only), so a
@@ -104,6 +112,16 @@ export async function handleHook(agent: AgentId, raw: unknown, env: NodeJS.Proce
   } catch (err) {
     // D-FU-PS-1 keeps its one stderr line (code first); the decision part is new.
     return fail("project", err, "hooks: no project: " + String((err as { code?: unknown }).code ?? "ERROR") + " " + message(err) + "\n"); // D-HNE-GUARD-1 supersedes D-FU-PS-1: a flooding call is denied, the rest allowed
+  }
+  // Antigravity spawns plugin MCP servers with cwd = PLUGIN_ROOT and agy 1.5.x does not advertise MCP roots/list.
+  // Record the real workspace cwd and conversationId on SessionStart, PreInvocation, and own ctx_* PreToolUse calls
+  // (never on generic run_command/read_file PreToolUse so D5 hook-roundtrip and hook-sample probes stay clean and fast).
+  if (ev.agent === "antigravity" && (
+    ev.event === "SessionStart"
+    || ev.event === "UserPromptSubmit"
+    || (ev.event === "PreToolUse" && (ev.tool?.canonicalName.startsWith(OWN_TOOL_PREFIX) ?? false))
+  )) {
+    writeAntigravityContext(env, { cwd: isAbsolute(ev.cwd) ? ev.cwd : project.worktree, sessionId: ev.sessionId });
   }
   let decision: Decision;
   const settle: Settle = {};

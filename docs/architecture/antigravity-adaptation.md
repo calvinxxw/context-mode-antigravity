@@ -127,12 +127,16 @@ Antigravity 支持在 `mcp_config.json` 的 server 配置下声明 `"tools": { "
 
 其余 4 个低频运维工具（`ctx_stats`、`ctx_doctor`、`ctx_upgrade`、`ctx_purge`）保持默认懒加载，从而兼顾上下文节省与热路径零额外往返。
 
-### 3.5 工作区路径解析与 #1410 修复
+### 3.5 工作区路径解析、会话连续性与插件工具名前缀
 
-当 Antigravity 以插件形式启动 `server.mjs --agent antigravity` 时，子进程 `cwd` 往往落在 `~/.gemini/config/plugins/context-mode`（同时 `process.env.PLUGIN_ROOT` 指向该目录）。本次通过两层机制彻底解决：
+当 Antigravity (`agy 1.5.x`) 以插件形式启动 `server.mjs --agent antigravity` 时，子进程 `cwd` 固定为 `~/.gemini/config/plugins/context-mode`（`PLUGIN_ROOT`），且尚未向 MCP Server 提供 `roots/list`；而生命周期 Hook（`SessionStart`、`PreInvocation`、`PreToolUse`、`PostToolUse`）每次都会在 stdin JSON 中携带真实的 `cwd`、`workspacePaths` 与 `conversationId`。本次通过三层机制解决：
 
-1. `workspaceCwdOf()`（`src/entries/server.ts`）检测若 `cwd` 与 `process.env.PLUGIN_ROOT` 相同（经 `path.resolve` 归一化），则拒绝将其视为项目目录。
-2. `dispatch()`（`src/entries/server.ts`）在检测到 `agent === "antigravity"` 且客户端声明支持 `roots` 能力时，在收到首条工具调用时调用 MCP `roots/list` 获取用户当前打开的真实工作区路径并缓存；若客户端未提供 `roots` 则优雅退回到合法的 `cwd`。
+1. **三层工作区解析（`src/entries/server.ts` + `src/core/project/antigravity-context.ts`）**：
+   - 优先级 1：若客户端支持 MCP `roots/list` 并返回有效根目录，直接使用 `fromRoots`；
+   - 优先级 2：`workspaceCwdOf()` 过滤 `PLUGIN_ROOT` 与脚本目录后，若 `spawn-cwd` 为合法工作区，直接使用；
+   - 优先级 3：回退读取 `<DATA_ROOT>/antigravity-context.json`（由 `SessionStart`、`PreInvocation` 及 `ctx_*` 的 `PreToolUse` 原子写入，跳过普通 `run_command`/`read_file` 探活以避免污染与 D5 耗时波动）。若尚无交接文件则保持 `NO_PROJECT` 优雅降级。
+2. **会话 ID（`conversationId`）桥接**：当 MCP 请求未通过 `_meta` / 环境变量提供 `sessionId` 且交接文件的 `cwd` 与当前解析工作区一致时，MCP Server 复用 Hook 记录的 `conversationId`，使 `ctx_resume`、`ctx_stats` 与 `ctx_search(scope:"session")` 与 Hook 日志无缝打通。
+3. **插件工具名前缀动态适配（`src/core/hooks/dispatch.ts` + `fallback.ts`）**：Antigravity 启动插件 Hook 时注入 `PLUGIN_ROOT` 环境变量。检测到 `PLUGIN_ROOT` 非空时自动采用 `mcp_context-mode_context-mode_` 前缀，全局安装（无 `PLUGIN_ROOT`）保持 `mcp_context-mode_`。
 
 ---
 

@@ -17,6 +17,7 @@ import type { DbHandle, ProjectContext, ToolContext, ToolReply } from "../core/c
 import { appendEvent, ownCallRow } from "../core/journal/append.ts";
 import { installExitGuard } from "../core/lifecycle/exit.ts";
 import { resolveConfigDir } from "../core/project/config-dir.ts";
+import { readAntigravityContext } from "../core/project/antigravity-context.ts";
 import { resolveProject } from "../core/project/resolve.ts";
 import { cleanupProject, sweepDeadProjects } from "../core/store/cleanup.ts";
 import { closeDb, openDb } from "../core/store/db.ts";
@@ -237,14 +238,19 @@ export async function startServer(argv: string[], env: NodeJS.ProcessEnv): Promi
       const agent = resolveAgent(argv, env);
       // D-VSCODE-ROOTS-1: VS Code (user mcp.json, spawn cwd HOME) names the workspace only in roots/list. Asked on
       // each call, so a folder the user opens later is the project of the next call.
-      // Antigravity plugins may also spawn the MCP server with cwd = PLUGIN_ROOT; ask roots/list when supported.
+      // Antigravity plugins spawn the MCP server with cwd = PLUGIN_ROOT; prefer MCP roots/list when supported,
+      // then valid spawn-cwd, then the hook-written antigravity-context.json handoff file.
       const fromRoots = (agent === "vscode" && !hasWorkspaceFolder(argv)) || agent === "antigravity"
         ? await workspaceFromRoots(server)
         : undefined;
       const callArgv = agent === "vscode" && fromRoots !== undefined ? [...argv, WORKSPACE_FOLDER_FLAG, fromRoots] : argv;
-      const callCwd = agent === "antigravity" && fromRoots !== undefined
+      const baseCwd = agent === "antigravity" && fromRoots !== undefined
         ? fromRoots
         : workspaceCwdOf(meta, process.cwd(), process.argv[1], env);
+      const agyContext = agent === "antigravity"
+        ? readAntigravityContext(env, [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], process.argv[1] ? dirname(process.argv[1]) : undefined])
+        : null;
+      const callCwd = baseCwd !== "" ? baseCwd : (agyContext?.cwd ?? "");
       // §5 step 6a, 7a: resolved lazily, at most once per call, never cached across calls.
       let project: ProjectContext | undefined;
       const projectOf = (): ProjectContext => {
@@ -252,12 +258,21 @@ export async function startServer(argv: string[], env: NodeJS.ProcessEnv): Promi
         project ??= resolveProject(agent, { env, argv: callArgv, cwd: callCwd, piCwd: undefined });
         return project;
       };
+      const baseSessionId = sessionIdOf(meta, agent, env, serverId);
+      const sessionId = agent === "antigravity"
+        && baseSessionId === RUN_SESSION_PREFIX + serverId
+        && agyContext !== null
+        && agyContext.sessionId !== ""
+        && callCwd !== ""
+        && realOrSame(agyContext.cwd) === realOrSame(callCwd)
+        ? agyContext.sessionId
+        : baseSessionId;
       const ctx: ToolContext = {
         get project(): ProjectContext {
           return projectOf();
         },
         ...(agent === undefined ? {} : { agent }), // D-1410-DOCTOR-NO-PROJECT-1
-        sessionId: sessionIdOf(meta, agent, env, serverId),
+        sessionId,
         turn: metaNumber(meta, "turn") ?? 0,
         signal: req.mcpReq.signal,
         clientInfo: server.server.getClientVersion(),

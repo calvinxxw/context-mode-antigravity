@@ -21,6 +21,7 @@ import * as opencode from "../src/adapters/opencode.ts";
 import * as antigravity from "../src/adapters/antigravity.ts";
 import { CLIENT_NAME_TO_PLATFORM } from "../src/core/contracts/client-map.ts";
 import { HOST_SHAPES, replyErrors, shapeErrors } from "../src/core/ops/hook-shape.ts";
+import { handleHook } from "../src/core/hooks/dispatch.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -2136,6 +2137,43 @@ describe("ADR-0020 adapters", () => {
       // PreToolUse has no injectSteps; allow safely. PostToolUse has no replace channel; return {}.
       assert.deepEqual(JSON.parse(encode(pre, { kind: "hint", text: "ignored", onceKey: "k" }).stdout), { decision: "allow" });
       assert.deepEqual(JSON.parse(encode(post, { kind: "replace", output: "short" }).stdout), {});
+    });
+
+    test("handleHook uses plugin tool prefix when PLUGIN_ROOT is set and global prefix otherwise", async () => {
+      const tmp = mkdtempSync(join(tmpdir(), "cm-agy-prefix-"));
+      try {
+        const baseEnv = { HOME: tmp, USERPROFILE: tmp, CONTEXT_MODE_DATA_DIR: join(tmp, "data") };
+        const ssPayload = { hookEventName: "SessionStart", conversationId: "s-plugin", cwd: tmp, workspacePaths: [tmp] };
+        const denyPayload = {
+          hookEventName: "PreToolUse",
+          conversationId: "s-plugin",
+          cwd: tmp,
+          workspacePaths: [tmp],
+          toolCall: { id: "t1", name: "run_command", args: { CommandLine: "curl https://example.com" } },
+        };
+
+        const ssPlugin = await handleHook("antigravity", ssPayload, { ...baseEnv, PLUGIN_ROOT: join(tmp, "plugin") });
+        const ssPluginJson = JSON.parse(ssPlugin.stdout);
+        assert.ok(ssPluginJson.injectSteps[0].systemMessage.systemMessage.includes("mcp_context-mode_context-mode_ctx_resume"), ssPlugin.stdout);
+
+        const denyPlugin = await handleHook("antigravity", denyPayload, { ...baseEnv, PLUGIN_ROOT: join(tmp, "plugin") });
+        const denyPluginJson = JSON.parse(denyPlugin.stdout);
+        assert.equal(denyPluginJson.decision, "deny");
+        assert.ok(denyPluginJson.reason.includes("mcp_context-mode_context-mode_ctx_execute"), denyPlugin.stdout);
+
+        const ssGlobal = await handleHook("antigravity", { ...ssPayload, conversationId: "s-global" }, baseEnv);
+        const ssGlobalJson = JSON.parse(ssGlobal.stdout);
+        assert.ok(ssGlobalJson.injectSteps[0].systemMessage.systemMessage.includes("mcp_context-mode_ctx_resume"), ssGlobal.stdout);
+        assert.equal(ssGlobalJson.injectSteps[0].systemMessage.systemMessage.includes("mcp_context-mode_context-mode_"), false, ssGlobal.stdout);
+
+        const denyGlobal = await handleHook("antigravity", { ...denyPayload, conversationId: "s-global" }, baseEnv);
+        const denyGlobalJson = JSON.parse(denyGlobal.stdout);
+        assert.equal(denyGlobalJson.decision, "deny");
+        assert.ok(denyGlobalJson.reason.includes("mcp_context-mode_ctx_execute"), denyGlobal.stdout);
+        assert.equal(denyGlobalJson.reason.includes("mcp_context-mode_context-mode_"), false, denyGlobal.stdout);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
     });
   });
 

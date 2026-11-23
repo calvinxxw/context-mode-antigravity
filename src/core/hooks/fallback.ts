@@ -10,10 +10,12 @@ import { join, resolve } from "node:path";
 import type { AgentId } from "../contracts/agents.ts";
 import { dataRootOf } from "../project/config-dir.ts";
 import {
+  ANTIGRAVITY_PLUGIN_ROOT_ENV,
   DATA_DIR_ENV, HOOK_ERROR_LOG_FILE, HOOK_FAULT_ENV, HOOK_FAULT_STAGES, NODE_MIN, HOOK_FAIL_CWD_KEYS, HOOK_FAIL_EVENT_KEYS, HOOK_FAIL_INPUT_KEYS, HOOK_FAIL_LINE, HOOK_FAIL_PRE_EVENTS, HOOK_FAIL_REDIRECT,
   HOOK_FAIL_TOOLS, HOOK_FAIL_TOOL_KEYS, HOOK_LOG_TAIL_BYTES, OUTPUT_CAP, OWN_TOOL_PREFIX, prefixToolNames, READ_PATH_KEYS, READ_PATH_LIST_KEY,
 } from "../contracts/constants.ts";
 import type { AdapterRow, HookOutput } from "../contracts/types.ts";
+import { PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX } from "../../adapters/antigravity.ts";
 import { getAdapter } from "../../adapters/table.ts";
 import { isMediaRead } from "../policy/read-media.ts";
 import { isOwnFile } from "../policy/own-file.ts";
@@ -182,8 +184,11 @@ export function allowOutput(agent: AgentId): HookOutput {
  * The host-shaped answer to a hook that failed. `raw` is the parsed stdin (any shape). Never throws.
  * A PreToolUse call that could flood the context is denied; everything else is this host's allow shape.
  */
-export function failureOutput(agent: AgentId, raw: unknown, err: unknown, cwdFallback = ""): HookOutput {
-  const row = getAdapter(agent);
+export function failureOutput(agent: AgentId, raw: unknown, err: unknown, cwdFallback = "", env: NodeJS.ProcessEnv = process.env): HookOutput {
+  const baseRow = getAdapter(agent);
+  const row = agent === "antigravity" && (env[ANTIGRAVITY_PLUGIN_ROOT_ENV] ?? "") !== ""
+    ? { ...baseRow, toolNamePrefix: ANTIGRAVITY_PLUGIN_TOOL_PREFIX }
+    : baseRow;
   try {
     if (!isRec(raw)) return allowOutput(agent);
     if (!isPreTool(row, firstString(raw, HOOK_FAIL_EVENT_KEYS))) return allowOutput(agent);
