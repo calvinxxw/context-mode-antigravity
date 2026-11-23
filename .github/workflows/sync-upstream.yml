@@ -1,0 +1,396 @@
+# Fork sync workflow for calvinxxw/context-mode -> upstream mksglu/context-mode.
+# Pulls upstream main, resolves conflicts on auto-generated plugin bundles, rebuilds
+# Antigravity + multi-agent bundles via build/build.mjs & build/main-tree.mjs, runs
+# verification checks, and pushes directly to main (or opens a PR).
+name: Sync Upstream
+
+on:
+  schedule:
+    # Daily at 02:00 UTC (10:00 Beijing Time)
+    - cron: "0 2 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "Sync mode: direct pushes to main after checks pass; pr opens a Pull Request"
+        type: choice
+        default: direct
+        options:
+          - direct
+          - pr
+      force_rebuild:
+        description: "Rebuild plugin bundles even if main is already up to date with upstream"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+env:
+  UPSTREAM_REPO: https://github.com/mksglu/context-mode.git
+  UPSTREAM_BRANCH: main
+  NODE_VERSION: "24.15.0"
+
+jobs:
+  sync:
+    name: Sync upstream & rebuild bundles
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout fork repository
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.SYNC_PAT || github.token }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Fetch upstream and check for updates
+        id: check
+        shell: bash
+        env:
+          FORCE_REBUILD: ${{ inputs.force_rebuild == true && 'true' || 'false' }}
+        run: |
+          set -euo pipefail
+          git remote remove upstream 2>/dev/null || true
+          git remote add upstream "$UPSTREAM_REPO"
+          git fetch --no-tags upstream "$UPSTREAM_BRANCH"
+
+          UPSTREAM_SHA=$(git rev-parse "upstream/$UPSTREAM_BRANCH")
+          UPSTREAM_SHORT="${UPSTREAM_SHA:0:7}"
+          HEAD_SHA=$(git rev-parse HEAD)
+          BEHIND=$(git rev-list --count "HEAD..upstream/$UPSTREAM_BRANCH")
+          UPSTREAM_VERSION=$(git show "upstream/$UPSTREAM_BRANCH:package.json" | node -e "const d = JSON.parse(require('fs').readFileSync(0, 'utf8')); process.stdout.write(String(d.version || ''));")
+          LOCAL_VERSION=$(node -e "const d = JSON.parse(require('fs').readFileSync('package.json', 'utf8')); process.stdout.write(String(d.version || ''));")
+
+          echo "head_sha=$HEAD_SHA" >> "$GITHUB_OUTPUT"
+          echo "upstream_sha=$UPSTREAM_SHA" >> "$GITHUB_OUTPUT"
+          echo "upstream_short=$UPSTREAM_SHORT" >> "$GITHUB_OUTPUT"
+          echo "behind=$BEHIND" >> "$GITHUB_OUTPUT"
+          echo "upstream_version=$UPSTREAM_VERSION" >> "$GITHUB_OUTPUT"
+          echo "local_version=$LOCAL_VERSION" >> "$GITHUB_OUTPUT"
+
+          if [ "$BEHIND" -eq 0 ] && [ "$FORCE_REBUILD" != "true" ]; then
+            echo "needs_sync=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Upstream Sync: Already Up to Date"
+              echo "- Fork \`main\`: \`${HEAD_SHA:0:7}\` (v${LOCAL_VERSION})"
+              echo "- Upstream \`mksglu/context-mode@${UPSTREAM_BRANCH}\`: \`${UPSTREAM_SHORT}\` (v${UPSTREAM_VERSION})"
+              echo "- Commits behind: \`0\`"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "needs_sync=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Merge upstream and auto-resolve generated artifact conflicts
+        id: merge
+        if: steps.check.outputs.needs_sync == 'true'
+        shell: bash
+        env:
+          BEHIND: ${{ steps.check.outputs.behind }}
+          HAS_SYNC_PAT: ${{ secrets.SYNC_PAT != '' && 'true' || '' }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config commit.gpgsign false
+
+          if [ "$BEHIND" -eq 0 ]; then
+            echo "status=rebuild_only" >> "$GITHUB_OUTPUT"
+            echo "workflows_skipped=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          is_generated_path() {
+            case "$1" in
+              plugins/*|\
+              .claude-plugin/marketplace.json|\
+              .claude-plugin/plugin.json|\
+              .codex-plugin/plugin.json|\
+              .agents/plugins/marketplace.json|\
+              gemini-extension.json|\
+              qwen-extension.json|\
+              hooks/hooks.json|\
+              hooks/qwen.json|\
+              .antigravity-plugin/plugin.json|\
+              hooks.json|\
+              mcp_config.json)
+                return 0
+                ;;
+              *)
+                return 1
+                ;;
+            esac
+          }
+
+          set +e
+          git merge --no-commit --no-ff "upstream/$UPSTREAM_BRANCH"
+          MERGE_EXIT=$?
+          set -e
+
+          if [ "$MERGE_EXIT" -ne 0 ]; then
+            UNMERGED=$(git diff --name-only --diff-filter=U)
+            while IFS= read -r f; do
+              [ -z "$f" ] && continue
+              if is_generated_path "$f"; then
+                echo "Auto-resolving generated artifact conflict (will rebuild): $f"
+                if git cat-file -e "HEAD:$f" 2>/dev/null; then
+                  git checkout --ours -- "$f"
+                  git add -- "$f"
+                else
+                  git rm -f --ignore-unmatch -- "$f"
+                fi
+              fi
+            done <<< "$UNMERGED"
+          fi
+
+          # When pushing with the built-in GITHUB_TOKEN (no workflow scope), preserve fork's
+          # .github/workflows/* files so git push is never rejected by GitHub.
+          WORKFLOWS_SKIPPED=""
+          if [ -z "$HAS_SYNC_PAT" ]; then
+            WF_CHANGED=$( (git diff --cached --name-only -- .github/workflows/ ; git diff --name-only -- .github/workflows/ ; git diff --name-only --diff-filter=U -- .github/workflows/) | sort -u )
+            if [ -n "$WF_CHANGED" ]; then
+              echo "Preserving fork .github/workflows/* (built-in GITHUB_TOKEN cannot modify workflow files):"
+              while IFS= read -r wf; do
+                [ -z "$wf" ] && continue
+                echo "  - $wf"
+                if git cat-file -e "HEAD:$wf" 2>/dev/null; then
+                  git checkout HEAD -- "$wf"
+                  git add -- "$wf"
+                else
+                  git rm -f --ignore-unmatch -- "$wf"
+                fi
+              done <<< "$WF_CHANGED"
+              WORKFLOWS_SKIPPED=$(printf '%s' "$WF_CHANGED" | paste -sd ',' -)
+            fi
+          fi
+
+          REMAINING=$(git diff --name-only --diff-filter=U)
+          if [ -n "$REMAINING" ]; then
+            echo "Unresolved source conflicts:"
+            echo "$REMAINING"
+            git merge --abort || true
+            echo "status=conflict" >> "$GITHUB_OUTPUT"
+            {
+              echo "conflicts<<EOF"
+              echo "$REMAINING"
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "status=merged" >> "$GITHUB_OUTPUT"
+          echo "workflows_skipped=$WORKFLOWS_SKIPPED" >> "$GITHUB_OUTPUT"
+
+      - name: Report source merge conflict via GitHub Issue
+        if: steps.merge.outputs.status == 'conflict'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_SHA: ${{ steps.check.outputs.upstream_sha }}
+          UPSTREAM_SHORT: ${{ steps.check.outputs.upstream_short }}
+          UPSTREAM_VERSION: ${{ steps.check.outputs.upstream_version }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create sync-upstream --force --color "D93F0B" --description "Upstream sync status and conflicts" >/dev/null 2>&1 || true
+
+          BODY=$(cat <<EOF
+          Automatic upstream sync encountered source merge conflicts and left \`main\` unchanged.
+
+          - **Upstream**: \`mksglu/context-mode@main\` (\`${UPSTREAM_SHORT}\`, v${UPSTREAM_VERSION})
+          - **Workflow run**: ${RUN_URL}
+
+          ### Conflicting source files
+          \`\`\`text
+          ${CONFLICTS}
+          \`\`\`
+
+          ### How to resolve locally
+          \`\`\`bash
+          git remote add upstream https://github.com/mksglu/context-mode.git 2>/dev/null || true
+          git fetch upstream main
+          git merge --no-commit --no-ff upstream/main
+          # Resolve the source conflicts above, then rebuild bundles:
+          node scripts/ci-install.mjs --no-package-lock
+          node build/build.mjs --out release-out --version "${UPSTREAM_VERSION}" --sha "${UPSTREAM_SHA}"
+          node build/main-tree.mjs --pkg release-out --repo . --version "${UPSTREAM_VERSION}"
+          rm -rf release-out
+          git add -A && git commit -m "chore(sync): merge upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT}) and rebuild bundles"
+          git push origin main
+          \`\`\`
+          EOF
+          )
+
+          EXISTING=$(gh issue list --label sync-upstream --state open --json number --jq '.[0].number // ""')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create \
+              --title "[sync-upstream] Merge conflict syncing upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT})" \
+              --label sync-upstream \
+              --body "$BODY"
+          fi
+
+          {
+            echo "### Upstream Sync: Source Merge Conflict"
+            echo "Opened/updated issue with label \`sync-upstream\`."
+            echo '```text'
+            echo "$CONFLICTS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          exit 1
+
+      - name: Install dev tooling
+        if: steps.check.outputs.needs_sync == 'true' && steps.merge.outputs.status != 'conflict'
+        run: node scripts/ci-install.mjs --no-package-lock
+
+      - name: Sync version metadata and rebuild plugin bundles
+        if: steps.check.outputs.needs_sync == 'true' && steps.merge.outputs.status != 'conflict'
+        shell: bash
+        env:
+          UPSTREAM_VERSION: ${{ steps.check.outputs.upstream_version }}
+          UPSTREAM_SHA: ${{ steps.check.outputs.upstream_sha }}
+        run: |
+          set -euo pipefail
+          node --input-type=module -e '
+            import { setVersions } from "./scripts/release/dev-version.mjs";
+            const touched = setVersions(process.cwd(), process.env.UPSTREAM_VERSION);
+            console.log("Updated version files:", touched.join(", "));
+          '
+          node build/build.mjs --out release-out --version "$UPSTREAM_VERSION" --sha "$UPSTREAM_SHA"
+          node build/main-tree.mjs --pkg release-out --repo . --version "$UPSTREAM_VERSION"
+
+      - name: Verify build, typecheck, hygiene, and core/Antigravity tests
+        if: steps.check.outputs.needs_sync == 'true' && steps.merge.outputs.status != 'conflict'
+        shell: bash
+        run: |
+          set -euo pipefail
+          node build/prompt-lint.mjs --out release-out
+          node build/build.mjs --generated-only
+          npm run typecheck
+          node build/check-removed.mjs
+          node build/check-secrets.mjs
+          node -e '
+            const { execFileSync } = require("node:child_process");
+            const out = JSON.parse(execFileSync(process.execPath, ["e2e/checks/repo-github-files.mjs"], { encoding: "utf8" }));
+            if (!out.ok) { console.error("repo-github-files failed:", out); process.exit(1); }
+            console.log("repo-github-files: ok");
+          '
+          node --test \
+            tests/0007-identity.test.mjs \
+            tests/0010-doctor-upgrade.test.mjs \
+            tests/0018-build.test.mjs \
+            tests/0018-contracts.test.mjs \
+            tests/0020-adapters.test.mjs \
+            tests/0020-plugins.test.mjs \
+            tests/0023-install-docs.test.mjs
+          rm -rf release-out src/prompt/_generated.ts
+
+      - name: Commit and push or open PR
+        if: steps.check.outputs.needs_sync == 'true' && steps.merge.outputs.status != 'conflict'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SYNC_PAT || github.token }}
+          MODE: ${{ inputs.mode || 'direct' }}
+          MERGE_STATUS: ${{ steps.merge.outputs.status }}
+          BEHIND: ${{ steps.check.outputs.behind }}
+          UPSTREAM_SHA: ${{ steps.check.outputs.upstream_sha }}
+          UPSTREAM_SHORT: ${{ steps.check.outputs.upstream_short }}
+          UPSTREAM_VERSION: ${{ steps.check.outputs.upstream_version }}
+          WORKFLOWS_SKIPPED: ${{ steps.merge.outputs.workflows_skipped }}
+        run: |
+          set -euo pipefail
+          git add -A
+
+          if [ ! -f .git/MERGE_HEAD ] && git diff --cached --quiet; then
+            echo "No changes to commit after rebuild."
+            {
+              echo "### Upstream Sync: No Changes"
+              echo "Rebuild produced identical files; nothing to commit."
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          if [ "$MERGE_STATUS" = "merged" ]; then
+            TITLE="chore(sync): merge upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT}) and rebuild bundles"
+          else
+            TITLE="chore(sync): rebuild bundles for v${UPSTREAM_VERSION} (${UPSTREAM_SHORT})"
+          fi
+
+          BODY="Synced from mksglu/context-mode@main (${UPSTREAM_SHA}, ${BEHIND} commits)."
+          if [ -n "$WORKFLOWS_SKIPPED" ]; then
+            BODY="${BODY}"$'\n'"Preserved fork workflows (skipped upstream changes): ${WORKFLOWS_SKIPPED}"
+          fi
+
+          git commit -m "$TITLE" -m "$BODY"
+          NEW_SHA=$(git rev-parse --short HEAD)
+
+          if [ "$MODE" = "pr" ]; then
+            BRANCH="sync/upstream-${UPSTREAM_SHORT}"
+            git checkout -B "$BRANCH"
+            git push --force origin "$BRANCH"
+            EXISTING_PR=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // ""')
+            if [ -n "$EXISTING_PR" ]; then
+              gh pr comment "$EXISTING_PR" --body "Updated sync branch with commit \`${NEW_SHA}\` (v${UPSTREAM_VERSION})."
+            else
+              gh pr create \
+                --base main \
+                --head "$BRANCH" \
+                --title "$TITLE" \
+                --body "$BODY"
+            fi
+            {
+              echo "### Upstream Sync: PR Ready"
+              echo "- Branch: \`${BRANCH}\`"
+              echo "- Commit: \`${NEW_SHA}\` (v${UPSTREAM_VERSION})"
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            git push origin HEAD:refs/heads/main
+            # Close any previously open sync-upstream conflict/failure issues.
+            OPEN_ISSUES=$(gh issue list --label sync-upstream --state open --json number --jq '.[].number')
+            for num in $OPEN_ISSUES; do
+              gh issue close "$num" --comment "Resolved by automatic sync commit \`${NEW_SHA}\` (upstream v${UPSTREAM_VERSION}, \`${UPSTREAM_SHORT}\`)."
+            done
+            {
+              echo "### Upstream Sync: Pushed to \`main\`"
+              echo "- Commit: \`${NEW_SHA}\`"
+              echo "- Upstream: \`mksglu/context-mode@main\` (\`${UPSTREAM_SHORT}\`, v${UPSTREAM_VERSION}, ${BEHIND} commits merged)"
+              if [ -n "$WORKFLOWS_SKIPPED" ]; then
+                echo "- Preserved fork workflows: \`${WORKFLOWS_SKIPPED}\`"
+              fi
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Report build or verification failure via GitHub Issue
+        if: failure() && steps.check.outputs.needs_sync == 'true' && steps.merge.outputs.status != 'conflict'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          UPSTREAM_SHORT: ${{ steps.check.outputs.upstream_short }}
+          UPSTREAM_VERSION: ${{ steps.check.outputs.upstream_version }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          gh label create sync-upstream --force --color "D93F0B" --description "Upstream sync status and conflicts" >/dev/null 2>&1 || true
+          BODY="Automatic upstream sync merged \`mksglu/context-mode@main\` (\`${UPSTREAM_SHORT}\`, v${UPSTREAM_VERSION}) cleanly, but build or verification failed. \`main\` was not modified."$'\n\n'"Workflow run: ${RUN_URL}"
+          EXISTING=$(gh issue list --label sync-upstream --state open --json number --jq '.[0].number // ""')
+          if [ -n "$EXISTING" ]; then
+            gh issue comment "$EXISTING" --body "$BODY"
+          else
+            gh issue create \
+              --title "[sync-upstream] Verification failed syncing upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT})" \
+              --label sync-upstream \
+              --body "$BODY"
+          fi
