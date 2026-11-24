@@ -381,6 +381,24 @@ describe("ADR-0009 section 2: candidates", { concurrency: CONC }, () => {
     const out = buildCandidates(rows, "s1");
     assert.equal(out.lastRequest.seq, 1);
   });
+
+  test("[M4] candidates/collapses-consecutive-duplicate-prompts", () => {
+    const rows = [
+      row({ seq: 1, kind: "prompt", turn: 1, body: "/plan" }),
+      row({ seq: 2, kind: "prompt", turn: 2, body: "/plan" }),
+      row({ seq: 3, kind: "prompt", turn: 3, body: "/plan" }),
+      row({ seq: 4, kind: "prompt", turn: 4, body: "implement" }),
+      row({ seq: 5, kind: "prompt", turn: 5, body: "implement" }),
+      row({ seq: 6, kind: "prompt", turn: 6, body: "/plan" }),
+    ];
+    const out = buildCandidates(rows, "s1");
+    assert.equal(out.lastRequest.text, "now: /plan");
+    assert.equal(out.lastRequest.seq, 6);
+    assert.deepEqual(
+      out.earlierRequests.map((c) => c.text),
+      ["asked #3: /plan", "asked #5: implement"],
+    );
+  });
 });
 
 describe("ADR-0009 section 3: score", { concurrency: CONC }, () => {

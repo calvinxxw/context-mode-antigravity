@@ -55,7 +55,18 @@ export function buildCandidates(rows: readonly JournalRow[], sessionId: string):
   const own = rows.filter((r) => r.session_id === sessionId).sort((a, b) => a.seq - b.seq);
 
   // steps 2 and 5: last request (pinned) and earlier requests.
-  const prompts = own.filter((r) => r.kind === "prompt");
+  // Collapse consecutive identical prompt bodies (keeping the newest seq in each run) so repeated mid-turn
+  // invocations (e.g. Antigravity PreInvocation) never flood ctx_resume.
+  const prompts: JournalRow[] = [];
+  for (const r of own) {
+    if (r.kind !== "prompt") continue;
+    const prev = prompts.length > 0 ? prompts[prompts.length - 1] : undefined;
+    if (prev !== undefined && prev.body === r.body) {
+      prompts[prompts.length - 1] = r;
+    } else {
+      prompts.push(r);
+    }
+  }
   const last = prompts.length > 0 ? prompts[prompts.length - 1] : undefined;
   const lastRequest = last === undefined ? null : make("last_request", last, "now: " + firstLine(last.body), 1, null);
   const earlierRequests = prompts

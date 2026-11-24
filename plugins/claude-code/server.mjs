@@ -58386,7 +58386,16 @@ function emptySet() {
 function buildCandidates(rows, sessionId) {
   if (!sessionId) return emptySet();
   const own5 = rows.filter((r) => r.session_id === sessionId).sort((a, b) => a.seq - b.seq);
-  const prompts = own5.filter((r) => r.kind === "prompt");
+  const prompts = [];
+  for (const r of own5) {
+    if (r.kind !== "prompt") continue;
+    const prev = prompts.length > 0 ? prompts[prompts.length - 1] : void 0;
+    if (prev !== void 0 && prev.body === r.body) {
+      prompts[prompts.length - 1] = r;
+    } else {
+      prompts.push(r);
+    }
+  }
   const last2 = prompts.length > 0 ? prompts[prompts.length - 1] : void 0;
   const lastRequest = last2 === void 0 ? null : make("last_request", last2, "now: " + firstLine3(last2.body), 1, null);
   const earlierRequests = prompts.slice(0, prompts.length - 1).map((r) => make("earlier_requests", r, "asked #" + r.seq + ": " + firstLine3(r.body), 1, null));

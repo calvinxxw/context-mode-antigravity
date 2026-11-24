@@ -203,12 +203,32 @@ async function userPromptSubmit(ev: CanonicalHookEvent, row: AdapterRow, project
   const body = ev.prompt ?? "";
   // D-FU-GCH-2: decided before this turn's own prompt row is queued, so that row never counts as "something to resume".
   const resume = await firstTurnResume(ev, row, project);
-  appendDetached(project, ev.sessionId, {
-    session_id: ev.sessionId, worktree: project.worktree, agent: ev.agent, kind: "prompt", tool: null, key: null,
-    path: null, ok: 1, exit_code: null, bytes: Buffer.byteLength(body), body, turn: ev.turn ?? 0,
-    sandbox_bytes: 0, returned_bytes: 0,
-  });
-  echoDetached(ev, project, body);
+  // Antigravity fires PreInvocation before every model step inside a single user turn with the same lastUserInput.
+  // Skip blank or consecutive identical prompts so mid-turn tool steps do not flood ctx_resume.
+  if (ev.agent === "antigravity") {
+    if (body.trim() !== "") {
+      const db = await hookDb(project);
+      if (ev.sessionId === "" || readLastPrompt(db, ev.sessionId) !== body) {
+        writeOrSpool(project, db, {
+          t: "row",
+          at: Date.now(),
+          row: {
+            session_id: ev.sessionId, worktree: project.worktree, agent: ev.agent, kind: "prompt", tool: null, key: null,
+            path: null, ok: 1, exit_code: null, bytes: Buffer.byteLength(body), body, turn: ev.turn ?? 0,
+            sandbox_bytes: 0, returned_bytes: 0,
+          },
+        });
+        echoDetached(ev, project, body);
+      }
+    }
+  } else {
+    appendDetached(project, ev.sessionId, {
+      session_id: ev.sessionId, worktree: project.worktree, agent: ev.agent, kind: "prompt", tool: null, key: null,
+      path: null, ok: 1, exit_code: null, bytes: Buffer.byteLength(body), body, turn: ev.turn ?? 0,
+      sandbox_bytes: 0, returned_bytes: 0,
+    });
+    echoDetached(ev, project, body);
+  }
   if (row.compactDelivery === "pending-flag") {
     const db = await hookDb(project);
     // §4.4 step 2.2: DELETE ... RETURNING inside BEGIN IMMEDIATE, so the delivery fires once.

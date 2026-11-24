@@ -22,6 +22,9 @@ import * as antigravity from "../src/adapters/antigravity.ts";
 import { CLIENT_NAME_TO_PLATFORM } from "../src/core/contracts/client-map.ts";
 import { HOST_SHAPES, replyErrors, shapeErrors } from "../src/core/ops/hook-shape.ts";
 import { handleHook } from "../src/core/hooks/dispatch.ts";
+import { resolveProject } from "../src/core/project/resolve.ts";
+import { openDb, closeDb } from "../src/core/store/db.ts";
+import { readSessionEvents } from "../src/core/journal/read.ts";
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -2171,6 +2174,33 @@ describe("ADR-0020 adapters", () => {
         assert.equal(denyGlobalJson.decision, "deny");
         assert.ok(denyGlobalJson.reason.includes("mcp_context-mode_ctx_execute"), denyGlobal.stdout);
         assert.equal(denyGlobalJson.reason.includes("mcp_context-mode_context-mode_"), false, denyGlobal.stdout);
+      } finally {
+        rmSync(tmp, { recursive: true, force: true });
+      }
+    });
+
+    test("PreInvocation deduplicates consecutive identical prompts and skips blank lastUserInput", async () => {
+      const tmp = mkdtempSync(join(tmpdir(), "cm-agy-preinv-dedup-"));
+      try {
+        const env = { HOME: tmp, USERPROFILE: tmp, CONTEXT_MODE_DATA_DIR: join(tmp, "data"), PLUGIN_ROOT: join(tmp, "plugin") };
+        const baseEv = { hookEventName: "PreInvocation", conversationId: "s-dedup", cwd: tmp, workspacePaths: [tmp] };
+
+        await handleHook("antigravity", { ...baseEv, lastUserInput: "   " }, env);
+        await handleHook("antigravity", { ...baseEv, lastUserInput: "first request" }, env);
+        await handleHook("antigravity", { ...baseEv, lastUserInput: "first request" }, env);
+        await handleHook("antigravity", { ...baseEv, lastUserInput: "first request" }, env);
+        await handleHook("antigravity", { ...baseEv, lastUserInput: "second request" }, env);
+        await handleHook("antigravity", { ...baseEv, lastUserInput: "second request" }, env);
+        await handleHook("antigravity", { ...baseEv, lastUserInput: "first request" }, env);
+
+        const project = resolveProject("antigravity", { env, argv: [], cwd: tmp });
+        const db = await openDb(project, { readOnly: true });
+        try {
+          const prompts = readSessionEvents(db, "s-dedup", "prompt").map((r) => r.body);
+          assert.deepEqual(prompts, ["first request", "second request", "first request"]);
+        } finally {
+          closeDb(db);
+        }
       } finally {
         rmSync(tmp, { recursive: true, force: true });
       }

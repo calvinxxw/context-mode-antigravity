@@ -8366,7 +8366,16 @@ function emptySet() {
 function buildCandidates(rows, sessionId) {
   if (!sessionId) return emptySet();
   const own3 = rows.filter((r) => r.session_id === sessionId).sort((a, b) => a.seq - b.seq);
-  const prompts = own3.filter((r) => r.kind === "prompt");
+  const prompts = [];
+  for (const r of own3) {
+    if (r.kind !== "prompt") continue;
+    const prev = prompts.length > 0 ? prompts[prompts.length - 1] : void 0;
+    if (prev !== void 0 && prev.body === r.body) {
+      prompts[prompts.length - 1] = r;
+    } else {
+      prompts.push(r);
+    }
+  }
   const last2 = prompts.length > 0 ? prompts[prompts.length - 1] : void 0;
   const lastRequest = last2 === void 0 ? null : make("last_request", last2, "now: " + firstLine2(last2.body), 1, null);
   const earlierRequests = prompts.slice(0, prompts.length - 1).map((r) => make("earlier_requests", r, "asked #" + r.seq + ": " + firstLine2(r.body), 1, null));
@@ -9788,23 +9797,52 @@ async function sessionStart(ev, row5, project) {
 async function userPromptSubmit(ev, row5, project) {
   const body = ev.prompt ?? "";
   const resume = await firstTurnResume(ev, row5, project);
-  appendDetached(project, ev.sessionId, {
-    session_id: ev.sessionId,
-    worktree: project.worktree,
-    agent: ev.agent,
-    kind: "prompt",
-    tool: null,
-    key: null,
-    path: null,
-    ok: 1,
-    exit_code: null,
-    bytes: Buffer.byteLength(body),
-    body,
-    turn: ev.turn ?? 0,
-    sandbox_bytes: 0,
-    returned_bytes: 0
-  });
-  echoDetached(ev, project, body);
+  if (ev.agent === "antigravity") {
+    if (body.trim() !== "") {
+      const db = await hookDb(project);
+      if (ev.sessionId === "" || readLastPrompt(db, ev.sessionId) !== body) {
+        writeOrSpool(project, db, {
+          t: "row",
+          at: Date.now(),
+          row: {
+            session_id: ev.sessionId,
+            worktree: project.worktree,
+            agent: ev.agent,
+            kind: "prompt",
+            tool: null,
+            key: null,
+            path: null,
+            ok: 1,
+            exit_code: null,
+            bytes: Buffer.byteLength(body),
+            body,
+            turn: ev.turn ?? 0,
+            sandbox_bytes: 0,
+            returned_bytes: 0
+          }
+        });
+        echoDetached(ev, project, body);
+      }
+    }
+  } else {
+    appendDetached(project, ev.sessionId, {
+      session_id: ev.sessionId,
+      worktree: project.worktree,
+      agent: ev.agent,
+      kind: "prompt",
+      tool: null,
+      key: null,
+      path: null,
+      ok: 1,
+      exit_code: null,
+      bytes: Buffer.byteLength(body),
+      body,
+      turn: ev.turn ?? 0,
+      sandbox_bytes: 0,
+      returned_bytes: 0
+    });
+    echoDetached(ev, project, body);
+  }
   if (row5.compactDelivery === "pending-flag") {
     const db = await hookDb(project);
     if (metaTake(db, PENDING_COMPACT_META_PREFIX + ev.sessionId) !== null) {

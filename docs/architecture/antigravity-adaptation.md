@@ -137,6 +137,7 @@ Antigravity 支持在 `mcp_config.json` 的 server 配置下声明 `"tools": { "
    - 优先级 3：回退读取 `<DATA_ROOT>/antigravity-context.json`（由 `SessionStart`、`PreInvocation` 及 `ctx_*` 的 `PreToolUse` 原子写入，跳过普通 `run_command`/`read_file` 探活以避免污染与 D5 耗时波动）。若尚无交接文件则保持 `NO_PROJECT` 优雅降级。
 2. **会话 ID（`conversationId`）桥接**：当 MCP 请求未通过 `_meta` / 环境变量提供 `sessionId` 且交接文件的 `cwd` 与当前解析工作区一致时，MCP Server 复用 Hook 记录的 `conversationId`，使 `ctx_resume`、`ctx_stats` 与 `ctx_search(scope:"session")` 与 Hook 日志无缝打通。
 3. **插件工具名前缀动态适配（`src/core/hooks/dispatch.ts` + `fallback.ts`）**：Antigravity 启动插件 Hook 时注入 `PLUGIN_ROOT` 环境变量。检测到 `PLUGIN_ROOT` 非空时自动采用 `mcp_context-mode_context-mode_` 前缀，全局安装（无 `PLUGIN_ROOT`）保持 `mcp_context-mode_`。
+4. **`PreInvocation` 重复提示去重（`src/core/hooks/dispatch.ts` + `src/core/compaction/candidates.ts`）**：Antigravity 的 `PreInvocation` 在单轮多步工具调用的每次模型调用前都会触发且 `lastUserInput` 不变。Hook 写入阶段跳过空白及与同会话最新一条 `prompt` 相同的重复文本，同时在 `buildCandidates()` 渲染层折叠连续重复的 `prompt` 行，避免挤占 `ctx_resume` 2048 B 预算。
 
 ---
 
