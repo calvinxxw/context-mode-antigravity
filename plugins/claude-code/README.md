@@ -1,12 +1,23 @@
-# Context Mode
+# Context Mode — Native Google Antigravity Plugin
 
-**A free, local plugin for 12 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
+**Native Google Antigravity plugin fork of [`mksglu/context-mode`](https://github.com/mksglu/context-mode) — a free, local plugin for 12 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
 
 [![npm downloads](https://img.shields.io/npm/dt/context-mode?label=npm%20downloads)](https://www.npmjs.com/package/context-mode) [![GitHub stars](https://img.shields.io/github/stars/mksglu/context-mode?style=flat&color=yellow)](https://github.com/mksglu/context-mode) [![Discord](https://img.shields.io/discord/1478479412700909750?label=Discord&logo=discord&color=5865f2)](https://discord.gg/DCN9jUgN5v) [![License: ELv2](https://img.shields.io/badge/License-ELv2-blue.svg)](https://github.com/mksglu/context-mode/blob/v2.2.2/LICENSE)
 
 **34K GitHub stars · 901K npm downloads** (read 2026-11-22, [stats.json](https://github.com/mksglu/context-mode/blob/v2.2.2/stats.json)) · on the Hacker News front page and GitHub Trending: [charts and sources](#adoption-stars-and-npm-downloads)
 
 > The Context Mode plugin is free and local, with its source open on GitHub. **Context Mode Gateway** is a separate hosted service with its own account and subscription. It takes the same idea from tool output to the whole conversation: Gateway Recall keeps long sessions searchable, and Gateway Memory shares what your agents learn across sessions and tools. [See how the Gateway works](https://contextmode.ai/docs/how-saving-works?utm_source=github&utm_medium=readme&utm_content=quote)
+
+**Google Antigravity Native Adaptation (App · CLI `agy` · IDE)** — First-class native plugin adaptation synced automatically with upstream `mksglu/context-mode` via GitHub Actions.
+**Google Antigravity 原生适配插件版**：本仓库为 Google Antigravity（App / CLI `agy` / IDE 通用）提供一等原生插件适配，并通过 GitHub Actions 自动同步上游更新。
+
+```sh
+agy plugin install https://github.com/calvinxxw/context-mode
+```
+
+- **Native plugin & hooks:** `.antigravity-plugin/plugin.json`, `mcp_config.json`, `hooks.json` (`SessionStart`, `PreInvocation`, `PreToolUse`, `PostToolUse`), PascalCase tool normalization, and `/ctx-doctor`, `/ctx-stats`, `/ctx-upgrade` skills.
+- **Direct MCP hot path & workspace resolution:** 5 hot-path tools (`ctx_execute`, `ctx_batch`, `ctx_index`, `ctx_search`, `ctx_resume`) configured `eager: true`, 3-tier workspace & `conversationId` resolution (`roots/list` + hook handoff), `PreInvocation` deduplication, and Windows UTF-8/GB18030 sandbox decoding.
+- **Details:** [Antigravity 原生适配开发说明 / Adaptation Guide](https://github.com/mksglu/context-mode/blob/v2.2.2/docs/architecture/antigravity-adaptation.md) · [Install & verify steps](#install-antigravity)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/mksglu/context-mode/v2.2.2/docs/assets/readme/hero-dark.png">

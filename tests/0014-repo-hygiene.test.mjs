@@ -1466,9 +1466,9 @@ describe("ADR-0015 repo: README thesis, links and figures (D-README-THESIS-1)", 
     assert.ok(!out.includes('"docs'), "OUT_FILES names a docs path");
   });
 
-  test("README line cap is 730 (was 700 by D-TIC-README-3, 650 by D-TIC-README-1, 600 by D-README-DWELL-1, 400 before) and its DEVIATIONS row quotes the owner", async () => {
+  test("README line cap is 760 (was 730 for antigravity block, 700 by D-TIC-README-3, 650 by D-TIC-README-1, 600 by D-README-DWELL-1, 400 before) and its DEVIATIONS row quotes the owner", async () => {
     const { README_MAX_LINES } = await import("../src/core/contracts/constants.ts");
-    assert.equal(README_MAX_LINES, 730);
+    assert.equal(README_MAX_LINES, 760);
     const rows = readRepo("docs/architecture/modules/DEVIATIONS.md").split("\n").filter((l) => l.includes("(D-README-THESIS-1)")); // the row id; later rows may name it in their text
     assert.equal(rows.length, 1);
     assert.ok(rows[0].includes("akademik bir tez"));
