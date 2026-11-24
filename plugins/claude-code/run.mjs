@@ -193,6 +193,7 @@ var SHELL_FAMILY = Object.freeze(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
 var PATHEXT_DEFAULT = ".COM;.EXE;.BAT;.CMD";
 var SOURCE_LABEL_MAX_CHARS = 80;
 var PLAIN_OUTPUT_ENV = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" });
+var UTF8_OUTPUT_ENV = Object.freeze({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" });
 var RUN_USAGE_LINE = "Usage: run.mjs <base64>";
 var SEARCH_USAGE_LINE = "Usage: search.mjs <source-id> <terms> [project-dir]";
 var RUN_FAIL_EXIT = 1;
@@ -6484,6 +6485,55 @@ function capBytes(s, cap) {
   return { text, cut: true, fullBytes };
 }
 
+// src/core/sandbox/decode.ts
+var UTF8_FATAL = new TextDecoder("utf-8", { fatal: true });
+var gb18030Fatal;
+function getGb18030() {
+  if (gb18030Fatal !== void 0) return gb18030Fatal;
+  try {
+    gb18030Fatal = new TextDecoder("gb18030", { fatal: true });
+  } catch {
+    gb18030Fatal = null;
+  }
+  return gb18030Fatal;
+}
+function decodeSegment(buf, gb) {
+  try {
+    return UTF8_FATAL.decode(buf);
+  } catch {
+    try {
+      return gb.decode(buf);
+    } catch {
+      return Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength).toString("utf8");
+    }
+  }
+}
+function decodeSandboxOutput(buf, platform = process.platform) {
+  if (buf.length === 0) return "";
+  if (platform !== "win32") return buf.toString("utf8");
+  try {
+    return UTF8_FATAL.decode(buf);
+  } catch {
+    if (buf.includes(0)) return buf.toString("utf8");
+    const gb = getGb18030();
+    if (gb === null) return buf.toString("utf8");
+    try {
+      return gb.decode(buf);
+    } catch {
+      const parts = [];
+      let start = 0;
+      for (let i = 0; i < buf.length; i += 1) {
+        if (buf[i] === 10) {
+          parts.push(decodeSegment(buf.subarray(start, i + 1), gb));
+          start = i + 1;
+        }
+      }
+      if (start < buf.length) parts.push(decodeSegment(buf.subarray(start), gb));
+      return parts.join("");
+    }
+  }
+}
+
 // src/core/sandbox/env.ts
 var NODE_PREFIX = "NODE_";
 var OPTIONS_SUFFIX = "_OPTIONS";
@@ -7167,14 +7217,14 @@ async function runWrapperMain(argv, env) {
     const project = projectOf(argv, cwd);
     const r = await runProcess([runtime, "-c", command], {
       cwd,
-      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV }),
+      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV }),
       signal: new AbortController().signal,
       timeoutMs: EXEC_TIMEOUT_MS
     });
     if (r.killed === "timeout") return exit(RUN_TIMEOUT_EXIT, new CtxError("TIMEOUT", { ms: EXEC_TIMEOUT_MS }).toLine() + "\n", "");
     if (r.exitCode === null) throw new CtxError("SPAWN_FAILED", { detail: runtime + " gave no exit code in " + cwd });
     const exitCode = r.exitCode;
-    const combined = r.stdout.toString("utf8") + (exitCode !== 0 ? r.stderr.toString("utf8") : "");
+    const combined = decodeSandboxOutput(r.stdout) + (exitCode !== 0 ? decodeSandboxOutput(r.stderr) : "");
     const head2 = "exit " + exitCode + " \xB7 " + bytes(combined) + " B";
     const db = await openDb(project);
     let text;

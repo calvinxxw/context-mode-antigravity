@@ -27,6 +27,7 @@ import {
   shellWord,
   SOURCE_LABEL_MAX_CHARS,
   USER_DENY_REASON_PREFIX,
+  UTF8_OUTPUT_ENV,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
 import type { CanonicalHookEvent, ProjectContext } from "../contracts/types.ts";
@@ -35,6 +36,7 @@ import { parseSourceHandle, SOURCE_ID_PREFIX } from "../store/fts.ts";
 import { decide } from "../policy/decide.ts";
 import { resolveProject } from "../project/resolve.ts";
 import { capBytes } from "../sandbox/cap.ts";
+import { decodeSandboxOutput } from "../sandbox/decode.ts";
 import { buildChildEnv } from "../sandbox/env.ts";
 import { findRuntime, noRuntimeError } from "../sandbox/runtimes.ts";
 import { runProcess } from "../sandbox/spawn.ts";
@@ -125,7 +127,7 @@ export async function runWrapperMain(argv: string[], env: NodeJS.ProcessEnv): Pr
     const project = projectOf(argv, cwd);
     const r = await runProcess([runtime, "-c", command], {
       cwd,
-      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV }),
+      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV }),
       signal: new AbortController().signal,
       timeoutMs: EXEC_TIMEOUT_MS,
     });
@@ -133,7 +135,7 @@ export async function runWrapperMain(argv: string[], env: NodeJS.ProcessEnv): Pr
     if (r.killed === "timeout") return exit(RUN_TIMEOUT_EXIT, new CtxError("TIMEOUT", { ms: EXEC_TIMEOUT_MS }).toLine() + "\n", "");
     if (r.exitCode === null) throw new CtxError("SPAWN_FAILED", { detail: runtime + " gave no exit code in " + cwd });
     const exitCode = r.exitCode;
-    const combined = r.stdout.toString("utf8") + (exitCode !== 0 ? r.stderr.toString("utf8") : "");
+    const combined = decodeSandboxOutput(r.stdout) + (exitCode !== 0 ? decodeSandboxOutput(r.stderr) : "");
     const head = "exit " + exitCode + " · " + bytes(combined) + " B";
     // Steps 7-9.
     const db = await openDb(project);

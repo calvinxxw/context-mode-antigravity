@@ -15,6 +15,7 @@ import * as C from "../src/core/contracts/constants.ts";
 import { formatError } from "../src/core/contracts/errors.ts";
 import { checkShell } from "../src/core/ops/doctor-env.ts";
 import { capBytes } from "../src/core/sandbox/cap.ts";
+import { decodeSandboxOutput } from "../src/core/sandbox/decode.ts";
 import { buildChildEnv } from "../src/core/sandbox/env.ts";
 import { killTree } from "../src/core/sandbox/kill.ts";
 import { findRuntime } from "../src/core/sandbox/runtimes.ts";
@@ -1567,5 +1568,69 @@ describe("PRD-v2 section 9: Windows Git Bash lookup (D-VT-WINBASH-1)", () => {
       assert.equal(findRuntime("only-here-1371", { Path: dir }), null);
       assert.equal(findRuntime("only-here-1371", { PATH: dir }), bin);
     } finally { rmSync(dir, { recursive: true, force: true }); }
+  });
+});
+
+describe("PRD-v2 section 9: Windows GBK / UTF-8 sandbox output decoding", { concurrency: CONC }, () => {
+  // GBK bytes for "中文测试" (d6 d0 ce c4 b2 e2 ca d4)
+  const GBK_ZH = Buffer.from([0xd6, 0xd0, 0xce, 0xc4, 0xb2, 0xe2, 0xca, 0xd4]);
+
+  test("decodeSandboxOutput preserves valid UTF-8 on both Windows and Linux", () => {
+    const buf = Buffer.from("中文测试 🚀\n", "utf8");
+    assert.equal(decodeSandboxOutput(buf, "win32"), "中文测试 🚀\n");
+    assert.equal(decodeSandboxOutput(buf, "linux"), "中文测试 🚀\n");
+  });
+
+  test("decodeSandboxOutput decodes pure GBK bytes on Windows and keeps raw UTF-8 pass-through on Linux", () => {
+    assert.equal(decodeSandboxOutput(GBK_ZH, "win32"), "中文测试");
+    assert.equal(decodeSandboxOutput(GBK_ZH, "linux"), GBK_ZH.toString("utf8"));
+  });
+
+  test("decodeSandboxOutput decodes mixed UTF-8 + GBK lines cleanly on Windows", () => {
+    const mixed = Buffer.concat([Buffer.from("状态 🚀\n", "utf8"), GBK_ZH, Buffer.from("\n", "utf8")]);
+    assert.equal(decodeSandboxOutput(mixed, "win32"), "状态 🚀\n中文测试\n");
+  });
+
+  test("decodeSandboxOutput does not misdecode binary buffers containing NUL bytes", () => {
+    const bin = Buffer.concat([Buffer.from([0x00]), GBK_ZH]);
+    assert.equal(decodeSandboxOutput(bin, "win32"), bin.toString("utf8"));
+  });
+
+  test("ctx_execute python prints Chinese and emoji cleanly without GBK mojibake", async () => {
+    if (findRuntime("python") === null) return;
+    const root = mkdtempSync(join(tmpdir(), "cm-py-utf8-"));
+    try {
+      const ctx = {
+        project: { projectKey: "2".repeat(16), projectDir: join(root, "projects", "2".repeat(16)), dbPath: join(root, "projects", "2".repeat(16), "context.db"), worktree: root, containmentRoot: root, agent: "antigravity", source: "spawn-cwd" },
+        sessionId: "s-utf8", turn: 1, signal: new AbortController().signal,
+      };
+      const out = await ctxExecute.handler({ language: "python", code: 'print("中文测试 🚀")' }, ctx);
+      assert.equal(out.isError, false, out.text);
+      assert.equal(out.text.trim(), "中文测试 🚀");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("ctx_execute on Windows decodes native GBK cmd.exe and UTF-8 PowerShell cleanly", async () => {
+    if (process.platform !== "win32") return;
+    const root = mkdtempSync(join(tmpdir(), "cm-win-gbk-"));
+    try {
+      const ctx = {
+        project: { projectKey: "3".repeat(16), projectDir: join(root, "projects", "3".repeat(16)), dbPath: join(root, "projects", "3".repeat(16), "context.db"), worktree: root, containmentRoot: root, agent: "antigravity", source: "spawn-cwd" },
+        sessionId: "s-win-gbk", turn: 1, signal: new AbortController().signal,
+      };
+      const cmdOut = await ctxExecute.handler({ language: "shell", code: 'cmd.exe //c echo 中文命令行测试' }, ctx);
+      assert.equal(cmdOut.isError, false, cmdOut.text);
+      assert.ok(cmdOut.text.includes("中文命令行测试"), cmdOut.text);
+
+      if (findRuntime("powershell") !== null) {
+        const psOut = await ctxExecute.handler({ language: "powershell", code: 'Write-Output "中文PS测试 🚀"' }, ctx);
+        assert.equal(psOut.isError, false, psOut.text);
+        assert.equal(psOut.text.trim(), "中文PS测试 🚀");
+      }
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

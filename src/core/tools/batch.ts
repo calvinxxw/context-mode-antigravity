@@ -5,13 +5,14 @@
 // D-M2-T11-1, D-M2-R4-1 (ingest byte budget, #961).
 import { z } from "zod/v4";
 import {
-  CANCELLED_LINE, ECHO_MAX_BYTES, EXEC_TIMEOUT_MS, INDEX_WRITE_CHUNK, OUTPUT_CAP, RETENTION_SIZE_CAP_BYTES, SEARCH_PAGE_SIZE,
+  CANCELLED_LINE, ECHO_MAX_BYTES, EXEC_TIMEOUT_MS, INDEX_WRITE_CHUNK, OUTPUT_CAP, RETENTION_SIZE_CAP_BYTES, SEARCH_PAGE_SIZE, UTF8_OUTPUT_ENV,
 } from "../contracts/constants.ts";
 import { CtxError, formatError } from "../contracts/errors.ts";
 import type { BatchInput, Chunk, DbHandle, ToolContext, ToolReply } from "../contracts/types.ts";
 import { chunkText } from "../index/chunk.ts";
 import { canonicalKey } from "../journal/append.ts";
 import { capBytes } from "../sandbox/cap.ts";
+import { decodeSandboxOutput } from "../sandbox/decode.ts";
 import { buildChildEnv } from "../sandbox/env.ts";
 import { findRuntime, noRuntimeError } from "../sandbox/runtimes.ts";
 import { runProcess } from "../sandbox/spawn.ts";
@@ -88,7 +89,7 @@ async function runCommand(cmd: string, shell: string | null, ctx: ToolContext, d
   if (left <= 0) return stoppedAt(cmd, formatError("TIMEOUT", { ms: boundMs }));
   const r = await runProcess([shell, SHELL_INLINE_FLAG, cmd], {
     cwd: ctx.project.worktree,
-    env: buildChildEnv(process.env),
+    env: buildChildEnv(process.env, { ...UTF8_OUTPUT_ENV }),
     signal: ctx.signal,
     timeoutMs: left,
   });
@@ -99,8 +100,8 @@ async function runCommand(cmd: string, shell: string | null, ctx: ToolContext, d
   }
   // impl/04 §2.3 step 12: stderr only on a non-zero exit.
   const withErr = r.exitCode !== 0;
-  const out = r.stdout.toString("utf8") + (withErr ? r.stderr.toString("utf8") : "");
-  return { head: headOf(cmd), block: headOf(cmd) + out, exitCode: r.exitCode, bytes: r.stdout.length + (withErr ? r.stderr.length : 0), error: null };
+  const out = decodeSandboxOutput(r.stdout) + (withErr ? decodeSandboxOutput(r.stderr) : "");
+  return { head: headOf(cmd), block: headOf(cmd) + out, exitCode: r.exitCode, bytes: Buffer.byteLength(out, "utf8"), error: null };
 }
 
 // ---- step 5: index, in INDEX_WRITE_CHUNK groups with the deadline checked before each group ----

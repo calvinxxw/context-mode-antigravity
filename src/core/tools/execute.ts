@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, parse, resolve } from "node:path";
 import { z } from "zod/v4";
 import {
-  BACKGROUND_HOLD_NOTE, BACKGROUND_REPLY_PREFIX, CANCELLED_LINE, EXEC_LANGUAGES, EXEC_PREVIEW_BYTES, EXEC_TIMEOUT_MS, OUTPUT_CAP, SHELL_FAMILY, SOURCE_LABEL_MAX_CHARS,
+  BACKGROUND_HOLD_NOTE, BACKGROUND_REPLY_PREFIX, CANCELLED_LINE, EXEC_LANGUAGES, EXEC_PREVIEW_BYTES, EXEC_TIMEOUT_MS, OUTPUT_CAP, PLAIN_OUTPUT_ENV, SHELL_FAMILY, SOURCE_LABEL_MAX_CHARS, UTF8_OUTPUT_ENV,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
 import type { ExecuteInput, JournalFacts, ToolContext, ToolReply } from "../contracts/types.ts";
@@ -16,6 +16,7 @@ import { moreLine, selectChunks } from "../index/select.ts";
 import { canonicalKey } from "../journal/append.ts";
 import { isInside } from "../project/contain.ts";
 import { capBytes } from "../sandbox/cap.ts";
+import { decodeSandboxOutput } from "../sandbox/decode.ts";
 import { buildChildEnv } from "../sandbox/env.ts";
 import { rewriteWindowsBuildTools } from "../sandbox/win-build.ts";
 import { findRuntime, noRuntimeError } from "../sandbox/runtimes.ts";
@@ -47,12 +48,10 @@ const SCRIPT_EXT: Readonly<Record<string, string>> = Object.freeze({
 });
 const SCRIPT_NAME = "code";
 const TMP_PREFIX = "ctx-exec-";
-// TECH-SPEC GP4: PowerShell scripts carry a UTF-8 BOM plus a console-encoding prelude (D-M2-T10-3).
+// TECH-SPEC GP4: PowerShell scripts carry a UTF-8 BOM plus a UTF-8 (no BOM) input/output/pipe encoding prelude (D-M2-T10-3).
 const PS_BOM = "﻿";
-const PS_PRELUDE = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8";
+const PS_PRELUDE = "[Console]::InputEncoding = [Console]::OutputEncoding = $OutputEncoding = [System.Text.UTF8Encoding]::new($false)";
 const PS_ARGS: readonly string[] = Object.freeze(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]);
-// GP4/deleted-cwd-no-ansi (#1286): plain output even when the parent sets FORCE_COLOR (D-M2-T10-4).
-const PLAIN_OUTPUT_ENV: Readonly<Record<string, string>> = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" });
 // Q8 (v1 grep rule): a shell exit 1 with empty stderr is "no match", not an error (D-M2-T10-1).
 const SOFT_EXIT = 1;
 
@@ -137,7 +136,7 @@ function spawnFailed(argv0: string, cwd: string): string {
 // Steps 12-17.
 async function finish(input: ExecuteInput, ctx: ToolContext, r: RunResult, exitCode: number, journal: JournalFacts): Promise<ToolReply> {
   const isError = exitCode !== 0 && !(input.language === "shell" && exitCode === SOFT_EXIT && r.stderr.length === 0);
-  const combined = r.stdout.toString("utf8") + (exitCode !== 0 ? r.stderr.toString("utf8") : "") + (r.held === true ? "\n" + BACKGROUND_HOLD_NOTE + "\n" : "");
+  const combined = decodeSandboxOutput(r.stdout) + (exitCode !== 0 ? decodeSandboxOutput(r.stderr) : "") + (r.held === true ? "\n" + BACKGROUND_HOLD_NOTE + "\n" : "");
   const fullBytes = Buffer.byteLength(combined, "utf8");
   const head = summaryLine(exitCode, fullBytes);
   const intent = input.intent ?? "";
@@ -174,7 +173,7 @@ async function handler(raw: ExecuteInput, ctx: ToolContext): Promise<ToolReply> 
   const input: ExecuteInput = parsed.data;
   // Steps 2-3.
   const cwd = ctx.project.worktree;
-  const extra: Record<string, string> = { ...PLAIN_OUTPUT_ENV };
+  const extra: Record<string, string> = { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV };
   if (input.file !== undefined) {
     const abs = resolve(cwd, input.file);
     const bad = fileError(input.file, abs, ctx.project.containmentRoot);

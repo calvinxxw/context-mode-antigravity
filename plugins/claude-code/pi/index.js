@@ -11388,6 +11388,7 @@ var BACKGROUND_HOLD_NOTE = "note: the command ended while a background process s
 var CANCELLED_LINE = "Cancelled.";
 var BACKGROUND_REPLY_PREFIX = "started in background, pid ";
 var PLAIN_OUTPUT_ENV = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" });
+var UTF8_OUTPUT_ENV = Object.freeze({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" });
 var RUN_LABEL_PREFIX = "run.mjs:";
 var SEARCH_WRAPPER_FILE = "search.mjs";
 var RUN_WRAPPER_AGENT = "claude-code";
@@ -21455,6 +21456,55 @@ function capBytes(s, cap) {
   return { text, cut: true, fullBytes };
 }
 
+// src/core/sandbox/decode.ts
+var UTF8_FATAL = new TextDecoder("utf-8", { fatal: true });
+var gb18030Fatal;
+function getGb18030() {
+  if (gb18030Fatal !== void 0) return gb18030Fatal;
+  try {
+    gb18030Fatal = new TextDecoder("gb18030", { fatal: true });
+  } catch {
+    gb18030Fatal = null;
+  }
+  return gb18030Fatal;
+}
+function decodeSegment(buf, gb) {
+  try {
+    return UTF8_FATAL.decode(buf);
+  } catch {
+    try {
+      return gb.decode(buf);
+    } catch {
+      return Buffer.from(buf.buffer, buf.byteOffset, buf.byteLength).toString("utf8");
+    }
+  }
+}
+function decodeSandboxOutput(buf, platform = process.platform) {
+  if (buf.length === 0) return "";
+  if (platform !== "win32") return buf.toString("utf8");
+  try {
+    return UTF8_FATAL.decode(buf);
+  } catch {
+    if (buf.includes(0)) return buf.toString("utf8");
+    const gb = getGb18030();
+    if (gb === null) return buf.toString("utf8");
+    try {
+      return gb.decode(buf);
+    } catch {
+      const parts = [];
+      let start = 0;
+      for (let i = 0; i < buf.length; i += 1) {
+        if (buf[i] === 10) {
+          parts.push(decodeSegment(buf.subarray(start, i + 1), gb));
+          start = i + 1;
+        }
+      }
+      if (start < buf.length) parts.push(decodeSegment(buf.subarray(start), gb));
+      return parts.join("");
+    }
+  }
+}
+
 // src/core/sandbox/env.ts
 var NODE_PREFIX = "NODE_";
 var OPTIONS_SUFFIX = "_OPTIONS";
@@ -22184,7 +22234,7 @@ async function runCommand(cmd, shell, ctx, deadline, boundMs) {
   if (left <= 0) return stoppedAt(cmd, formatError2("TIMEOUT", { ms: boundMs }));
   const r = await runProcess([shell, SHELL_INLINE_FLAG, cmd], {
     cwd: ctx.project.worktree,
-    env: buildChildEnv(process.env),
+    env: buildChildEnv(process.env, { ...UTF8_OUTPUT_ENV }),
     signal: ctx.signal,
     timeoutMs: left
   });
@@ -22194,8 +22244,8 @@ async function runCommand(cmd, shell, ctx, deadline, boundMs) {
     return stoppedAt(cmd, formatError2("SPAWN_FAILED", { detail: shell }));
   }
   const withErr = r.exitCode !== 0;
-  const out = r.stdout.toString("utf8") + (withErr ? r.stderr.toString("utf8") : "");
-  return { head: headOf(cmd), block: headOf(cmd) + out, exitCode: r.exitCode, bytes: r.stdout.length + (withErr ? r.stderr.length : 0), error: null };
+  const out = decodeSandboxOutput(r.stdout) + (withErr ? decodeSandboxOutput(r.stderr) : "");
+  return { head: headOf(cmd), block: headOf(cmd) + out, exitCode: r.exitCode, bytes: Buffer.byteLength(out, "utf8"), error: null };
 }
 function chunkKey(sourceId, ord) {
   return sourceId + ":" + ord;
@@ -29547,9 +29597,8 @@ var SCRIPT_EXT = Object.freeze({
 var SCRIPT_NAME = "code";
 var TMP_PREFIX = "ctx-exec-";
 var PS_BOM = "\uFEFF";
-var PS_PRELUDE = "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8";
+var PS_PRELUDE = "[Console]::InputEncoding = [Console]::OutputEncoding = $OutputEncoding = [System.Text.UTF8Encoding]::new($false)";
 var PS_ARGS = Object.freeze(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File"]);
-var PLAIN_OUTPUT_ENV2 = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" });
 var SOFT_EXIT = 1;
 var LAUNCHER = [
   'const { spawn } = require("node:child_process");',
@@ -29609,7 +29658,7 @@ function spawnFailed(argv0, cwd) {
 }
 async function finish(input, ctx, r, exitCode, journal) {
   const isError = exitCode !== 0 && !(input.language === "shell" && exitCode === SOFT_EXIT && r.stderr.length === 0);
-  const combined = r.stdout.toString("utf8") + (exitCode !== 0 ? r.stderr.toString("utf8") : "") + (r.held === true ? "\n" + BACKGROUND_HOLD_NOTE + "\n" : "");
+  const combined = decodeSandboxOutput(r.stdout) + (exitCode !== 0 ? decodeSandboxOutput(r.stderr) : "") + (r.held === true ? "\n" + BACKGROUND_HOLD_NOTE + "\n" : "");
   const fullBytes = Buffer.byteLength(combined, "utf8");
   const head2 = summaryLine(exitCode, fullBytes);
   const intent = input.intent ?? "";
@@ -29637,7 +29686,7 @@ async function handler3(raw, ctx) {
   if (!parsed.success) return fail5(schemaLine(parsed.error.issues[0]));
   const input = parsed.data;
   const cwd = ctx.project.worktree;
-  const extra = { ...PLAIN_OUTPUT_ENV2 };
+  const extra = { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV };
   if (input.file !== void 0) {
     const abs = resolve11(cwd, input.file);
     const bad = fileError(input.file, abs, ctx.project.containmentRoot);

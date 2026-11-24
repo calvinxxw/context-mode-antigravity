@@ -196,6 +196,7 @@ export const BACKGROUND_HOLD_NOTE = "note: the command ended while a background 
 export const CANCELLED_LINE = "Cancelled."; // impl/04 §2.3 step 11: reply on ctx.signal abort (not an ERROR_TEXT key)
 export const BACKGROUND_REPLY_PREFIX = "started in background, pid "; // impl/04 §2.3 step 9, A11 (DECISIONS-r9 S5): + decimal pid, nothing after
 export const PLAIN_OUTPUT_ENV: Readonly<Record<string, string>> = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" }); // impl/04 §2.3 step 6: plain child output (ctx_execute and run.mjs, D-M3-X1-4)
+export const UTF8_OUTPUT_ENV: Readonly<Record<string, string>> = Object.freeze({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" }); // Windows/Linux UTF-8 stdio for Python & nested Python subprocesses
 
 // impl/04 §4, ADR-0016 case B: the run.mjs wrapper and its search.mjs follow-up (DEVIATIONS D-M3-X1-1..5).
 export const RUN_USAGE_LINE = "Usage: run.mjs <base64>"; // §4 step 1
