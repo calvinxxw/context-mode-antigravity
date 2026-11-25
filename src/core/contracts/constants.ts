@@ -26,18 +26,12 @@ export const SYNC_INDEX_MAX_BYTES = 65536; // DECISIONS-r9 F1
 // D-M7-SV-1: the PostToolUse replace path has its own sizes, separate from OUTPUT_CAP (which stays the cap for
 // replies and the Read deny threshold). A result over REPLACE_TRIGGER_BYTES is indexed whole and the model gets
 // whole BM25-selected chunks of at most REPLACE_CHUNK_BYTES each, within REPLACE_RETURN_BYTES, plus the more line.
-// D-R48-TRIGGER-1 (#1326 coreycoburn): a documented setting, env CTX_REPLACE_TRIGGER_BYTES (a positive safe integer),
-// read once at process start; default 4096. Bench (bench/replay.mjs, 602 files, 28,390 calls, 37.9 MB): trigger 4096
-// saves 41.99% (1,878 replaces), 6144 saves 30.89% (998), 8192 saves 23.34% (582): raising it costs a quarter to
-// half of the saving, so the default stays; a user who wants 2-6 KB outputs whole sets the env var.
-export const REPLACE_TRIGGER_BYTES_DEFAULT = 4096;
+// D-REPLACE-TRIGGER-CONST-1 (amends D-R48-TRIGGER-1): a constant; no env, flag or setting changes it. Bench
+// (bench/replay.mjs, 602 files, 28,390 calls, 37.9 MB): 4096 saves 41.99%, 6144 saves 30.89%, 8192 saves 23.34%.
+// A stored output reads back whole through ctx_search. REPLACE_TRIGGER_ENV is the retired env name: doctor reads it
+// only to tell the user it is no longer read (D-REPLACE-TRIGGER-CONST-1); nothing else reads it.
+export const REPLACE_TRIGGER_BYTES = 4096;
 export const REPLACE_TRIGGER_ENV = "CTX_REPLACE_TRIGGER_BYTES";
-export function readReplaceTrigger(raw: string | undefined): number {
-  if (raw === undefined || raw.trim() === "") return REPLACE_TRIGGER_BYTES_DEFAULT;
-  const n = Number(raw);
-  return Number.isSafeInteger(n) && n > 0 ? n : REPLACE_TRIGGER_BYTES_DEFAULT;
-}
-export const REPLACE_TRIGGER_BYTES = readReplaceTrigger(process.env[REPLACE_TRIGGER_ENV]);
 // D-R41-READ-OFFSET-1 (#1314): a read-like tool (canonical name) called with a range key is the user's own window:
 // PostToolUse lets it through whole. Claude Code, Pi, Gemini: offset/limit; VS Code read_file and Copilot view map to them.
 export const RANGE_READ_TOOLS = Object.freeze(["Read", "view"]);
@@ -169,7 +163,7 @@ export const MS_PER_DAY = 86400000; // DEVIATIONS D-M1-3: day-to-ms factor for t
 
 // Store (impl/02 §0; DEVIATIONS D-M1-3: impl/00 names NODE_MIN and INDEX_WRITE_CHUNK cover the rest)
 export const PROJECT_KEY_HEX_LEN = 16; // impl/00 A5: first 16 hex chars of sha256(git common dir realpath)
-export const SCHEMA_VERSION = 6; // ADR-0002 decision 2: PRAGMA user_version; 2 = cost dedup index (D-M5-arch-2); 3 = chunks title + porter (D-SEARCH-3); 4 = trigram table + vocab (D-SEARCH-4); 5 = line_units (r3-ledger); 6 = path labels with forward slashes (D-PATH-LABEL-1)
+export const SCHEMA_VERSION = 7; // ADR-0002 decision 2: PRAGMA user_version; 2 = cost dedup index (D-M5-arch-2); 3 = chunks title + porter (D-SEARCH-3); 4 = trigram table + vocab (D-SEARCH-4); 5 = line_units (r3-ledger); 6 = path labels with forward slashes (D-PATH-LABEL-1); 7 = per-source line unit rowid span (D-1401-UNITS-SPAN-1)
 export const RETENTION_IDLE_DAYS = 30; // impl/02 A-S1: row-level, age since last access
 export const RETENTION_SIZE_CAP_BYTES = 524288000; // impl/02 A-S2 (Q7b): 500 MB per project
 export const PROJECT_DEAD_IDLE_DAYS = 14; // DECISIONS-r9 V22 (#1024): project-level sweep, dead owner
@@ -422,6 +416,11 @@ export const RECALL_BUDGET_BYTES = 2048; // whole recall block, wrapper included
 export const RECALL_MIN_SCORE = 5;
 export const RECALL_MAX_ROWS = 340; // newest rows read per prompt (= MAX_CANDIDATES_TOTAL)
 export const COMPACTED_META_PREFIX = "compacted:"; // meta key + session id: a compaction happened in this session
+// D-0027-LOSTBET-1 (ADR-0027 D3, FR5, 10.7): meta keys + session id + ":" + tool key. BET_META_PREFIX notes a replaced
+// full Read of a file (the bet); LOSTBET_META_PREFIX marks a lost bet, so later outputs with that key pass whole up to
+// OUTPUT_CAP for the rest of the session. A compaction clears the session's lostbet marks.
+export const BET_META_PREFIX = "bet:";
+export const LOSTBET_META_PREFIX = "lostbet:";
 export const RECALL_UNITS_SEEN_META_PREFIX = "recall_units_seen:"; // r3-ledger: JSON "source:ord" list of line units already injected
 export const UNITS_ANCESTOR_FACTOR = 8; // D-UNITS-BOUND-1: ancestor copies per output <= this x its bytes (0 of 680k units in 3520 real files drop a parent at 8)
 // D-1330-RECALL-PROMPT-1 (#1330): the recall query is the current prompt only, its first distinct words up to this
@@ -913,6 +912,10 @@ export const OMP_PRINT_MODE_INFO = "Print mode sends no prompt event. Use omp or
 export const OMP_SCRIPTS_INFO = "Add < /dev/null in scripts.";
 export const OMP_IMPORT_INFO = (claude: string, mcp: string): string =>
   `OMP also imports context-mode from ${claude}. To run it once, add "context-mode" to disabledServers in ${mcp}.`;
+// D-REPLACE-TRIGGER-CONST-1: the doctor info line when the retired CTX_REPLACE_TRIGGER_BYTES is still set (`where` is a
+// settings file path or "the process env"). Positive wording; never a WARN or FAIL row.
+export const REPLACE_TRIGGER_RETIRED_INFO = (where: string): string =>
+  `${REPLACE_TRIGGER_ENV} in ${where} is no longer read: context-mode stores every tool output over ${REPLACE_TRIGGER_BYTES} B whole and ctx_search reads it back. You can remove that line from ${where}.`;
 export const PI_CURRENT_MAJOR = 2; // an installed context-mode at this major or later is the current Pi package
 export const V1_OPENCODE_PLUGIN_SPEC = "context-mode"; // bare npm spec in .plugin[]
 export const V1_TMP_PREFIX = "context-mode-"; // <os tmp>/context-mode-*
@@ -932,6 +935,10 @@ export const OPENCODE_CONFIG_DIR_ENV = "OPENCODE_CONFIG_DIR"; // D-WIN-OPENCODE-
 export const APPDATA_ENV = "APPDATA"; // D-WIN-VSCODE-MCP-1: Windows roaming app data; VS Code keeps its user dir under it
 export const VSCODE_USER_DIR_SEGMENTS = Object.freeze(["Code", "User"] as const); // D-WIN-VSCODE-MCP-1: <app data>/Code/User/{mcp.json,settings.json}
 export const XDG_CONFIG_HOME_ENV = "XDG_CONFIG_HOME"; // D-WIN-OPENCODE-DIR-1: OpenCode takes its global dir from xdg-basedir: $XDG_CONFIG_HOME/opencode, else ~/.config/opencode
+export const XDG_DATA_HOME_ENV = "XDG_DATA_HOME"; // #1415 D-OMP-STORE-PATH-1: OMP keeps its plugin store in $XDG_DATA_HOME/omp/plugins once $XDG_DATA_HOME/omp exists (linux, darwin)
+export const PI_CONFIG_DIR_ENV = "PI_CONFIG_DIR"; // #1415 D-OMP-STORE-PATH-1: OMP config root <home>/<it>, default <home>/.omp; a path only, never the agent id
+export const OMP_APP_DIR = "omp"; // #1415 D-OMP-STORE-PATH-1: OMP APP_NAME, the dir under $XDG_DATA_HOME
+export const OMP_PLUGINS_DIR = "plugins"; // ADR-0026 decision 7: <OMP data root>/plugins holds omp-plugins.lock.json and package.json
 export const CONFIG_TOML_FILE = "config.toml"; // codex
 export const CONFIG_JSON_FILE = "config.json"; // zcode cli/
 export const ZCODE_CLI_DIR = "cli";

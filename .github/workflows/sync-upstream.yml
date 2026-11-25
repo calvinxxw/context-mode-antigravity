@@ -232,23 +232,28 @@ jobs:
           EOF
           )
 
-          EXISTING=$(gh issue list --label sync-upstream --state open --json number --jq '.[0].number // ""')
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "$BODY"
-          else
-            gh issue create \
-              --title "[sync-upstream] Merge conflict syncing upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT})" \
-              --label sync-upstream \
-              --body "$BODY"
-          fi
-
           {
             echo "### Upstream Sync: Source Merge Conflict"
-            echo "Opened/updated issue with label \`sync-upstream\`."
+            echo "Automatic upstream sync left \`main\` unchanged due to source conflicts:"
             echo '```text'
             echo "$CONFLICTS"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "$(gh repo view --json hasIssuesEnabled --jq '.hasIssuesEnabled' 2>/dev/null || echo false)" = "true" ]; then
+            gh label create sync-upstream --force --color "D93F0B" --description "Upstream sync status and conflicts" >/dev/null 2>&1 || true
+            EXISTING=$(gh issue list --label sync-upstream --state open --json number --jq '.[0].number // ""' 2>/dev/null || true)
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "$BODY" || true
+            else
+              gh issue create \
+                --title "[sync-upstream] Merge conflict syncing upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT})" \
+                --label sync-upstream \
+                --body "$BODY" || true
+            fi
+          else
+            echo "GitHub Issues are disabled on this repository; conflict details written to step summary."
+          fi
 
           exit 1
 
@@ -358,11 +363,13 @@ jobs:
             } >> "$GITHUB_STEP_SUMMARY"
           else
             git push origin HEAD:refs/heads/main
-            # Close any previously open sync-upstream conflict/failure issues.
-            OPEN_ISSUES=$(gh issue list --label sync-upstream --state open --json number --jq '.[].number')
-            for num in $OPEN_ISSUES; do
-              gh issue close "$num" --comment "Resolved by automatic sync commit \`${NEW_SHA}\` (upstream v${UPSTREAM_VERSION}, \`${UPSTREAM_SHORT}\`)."
-            done
+            # Close any previously open sync-upstream conflict/failure issues when Issues are enabled.
+            if [ "$(gh repo view --json hasIssuesEnabled --jq '.hasIssuesEnabled' 2>/dev/null || echo false)" = "true" ]; then
+              OPEN_ISSUES=$(gh issue list --label sync-upstream --state open --json number --jq '.[].number' 2>/dev/null || true)
+              for num in $OPEN_ISSUES; do
+                gh issue close "$num" --comment "Resolved by automatic sync commit \`${NEW_SHA}\` (upstream v${UPSTREAM_VERSION}, \`${UPSTREAM_SHORT}\`)." || true
+              done
+            fi
             {
               echo "### Upstream Sync: Pushed to \`main\`"
               echo "- Commit: \`${NEW_SHA}\`"
@@ -383,14 +390,20 @@ jobs:
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
-          gh label create sync-upstream --force --color "D93F0B" --description "Upstream sync status and conflicts" >/dev/null 2>&1 || true
           BODY="Automatic upstream sync merged \`mksglu/context-mode@main\` (\`${UPSTREAM_SHORT}\`, v${UPSTREAM_VERSION}) cleanly, but build or verification failed. \`main\` was not modified."$'\n\n'"Workflow run: ${RUN_URL}"
-          EXISTING=$(gh issue list --label sync-upstream --state open --json number --jq '.[0].number // ""')
-          if [ -n "$EXISTING" ]; then
-            gh issue comment "$EXISTING" --body "$BODY"
-          else
-            gh issue create \
-              --title "[sync-upstream] Verification failed syncing upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT})" \
-              --label sync-upstream \
-              --body "$BODY"
+          {
+            echo "### Upstream Sync: Build or Verification Failed"
+            echo "$BODY"
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(gh repo view --json hasIssuesEnabled --jq '.hasIssuesEnabled' 2>/dev/null || echo false)" = "true" ]; then
+            gh label create sync-upstream --force --color "D93F0B" --description "Upstream sync status and conflicts" >/dev/null 2>&1 || true
+            EXISTING=$(gh issue list --label sync-upstream --state open --json number --jq '.[0].number // ""' 2>/dev/null || true)
+            if [ -n "$EXISTING" ]; then
+              gh issue comment "$EXISTING" --body "$BODY" || true
+            else
+              gh issue create \
+                --title "[sync-upstream] Verification failed syncing upstream v${UPSTREAM_VERSION} (${UPSTREAM_SHORT})" \
+                --label sync-upstream \
+                --body "$BODY" || true
+            fi
           fi

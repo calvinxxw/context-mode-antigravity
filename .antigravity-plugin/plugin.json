@@ -34,5 +34,5 @@
     "Show ctx_stats for how much context was saved this session",
     "Summarize my earlier session work with ctx_resume"
   ],
-  "version": "2.2.2"
+  "version": "2.2.3"
 }

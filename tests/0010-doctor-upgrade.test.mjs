@@ -1651,8 +1651,13 @@ describe("ADR-0010 doctor D5: hook round trip", { concurrency: CONC }, () => {
     const base = { ...input(dir), samples: undefined, now: undefined };
     delete base.bareMs;
     delete base.now;
-    const fast = await checkHookRoundTrip(base);
-    assert.equal(fast.status, "PASS", fast.detail);
+    // D-D5-DEFAULT-ROUNDS-1: the fast stub gets up to 3 full D5 checks (each up to 9 pairs, D-D5-MORE-PAIRS-1); the first
+    // PASS ends it. A loaded runner (this file runs its tests at once beside the other test files) slowed every pair of
+    // one check to 74 ms over bare (macOS, 11.8 s for this test). A cost that is really over the bound is over it in
+    // every check, so it still FAILs all 3; the slow stub below is checked once.
+    const fast = [];
+    while (fast.length < 3 && fast.at(-1)?.status !== "PASS") fast.push(await checkHookRoundTrip(base));
+    assert.equal(fast.at(-1).status, "PASS", fast.map((r) => r.detail).join(" | "));
     writeFileSync(path.join(dir, C.HOOK_ENTRY_FILE), `setTimeout(()=>{process.stdout.write(${JSON.stringify(native)});},${C.HOOK_P95_MS + 400});process.stdin.resume();process.stdin.on("end",()=>{});`);
     const slow = await checkHookRoundTrip(base);
     assert.equal(slow.status, "FAIL");
@@ -2531,6 +2536,56 @@ describe("ADR-0010 ctx_doctor tool: all checks and order", { concurrency: CONC }
     if (reply.text.includes("| FAIL |")) assert.match(reply.text, /context-mode setup --agents codex/);
     assert.ok(Buffer.byteLength(reply.text, "utf8") <= 4096, "report stays within REPORT_CAP");
   });
+
+  // D-REPLACE-TRIGGER-CONST-1 (amends D-R48-TRIGGER-1): owner rule "ana kural hicbir zaman flag env kullanmiyoruz".
+  // The trigger is the constant 4096, so a CTX_REPLACE_TRIGGER_BYTES the user still sets does nothing. Doctor tells the
+  // truth: one INFO line under the table (not a WARN or FAIL row) naming where the value sits; doctor never writes it.
+  test("[D-REPLACE-TRIGGER-CONST-1] CTX_REPLACE_TRIGGER_BYTES in the env or a Claude Code settings env block: one INFO line; unset: none", async (t) => {
+    const { doctorReply } = await import("../src/core/tools/doctor.ts");
+    const NAME = "CTX_REPLACE_TRIGGER_BYTES";
+    const linesOf = (text) => text.split("\n").filter((l) => l.includes(NAME));
+    const writeEnv = (file, value) => {
+      mkdirSync(path.dirname(file), { recursive: true });
+      writeFileSync(file, JSON.stringify({ env: { [NAME]: value } }), "utf8");
+    };
+    async function run(home, worktree, extra = {}) {
+      const base = ctxFor(home);
+      const ctx = { ...base, project: { ...base.project, worktree, containmentRoot: worktree } };
+      const env = { HOME: home, USERPROFILE: home, PATH: process.env.PATH ?? "", CLAUDE_PROJECT_DIR: worktree, ...extra };
+      return doctorReply(ctx, { env, bundleDir: path.join(home, "no-bundle"), piCwd: undefined });
+    }
+    const infoLine = (text, where) => {
+      const lines = linesOf(text);
+      assert.equal(lines.length, 1, `${where}: one line names ${NAME}\n${text}`);
+      const [line] = lines;
+      assert.equal(line.startsWith("|"), false, `${where}: an info line, not a table row: ${line}`);
+      assert.equal(line.includes("WARN") || line.includes("FAIL"), false, `${where}: INFO, never WARN or FAIL: ${line}`);
+      assert.ok(line.includes("4096"), `${where}: names the 4096 B trigger: ${line}`);
+      assert.ok(line.includes("ctx_search"), `${where}: says how to read stored output back: ${line}`);
+      return line;
+    };
+
+    const clean = tmp(t);
+    assert.deepEqual(linesOf((await run(clean, clean)).text), [], "unset: no line names the env");
+
+    const procEnv = tmp(t);
+    infoLine((await run(procEnv, procEnv, { [NAME]: "8192" })).text, "process env");
+
+    const user = tmp(t);
+    const userFile = path.join(user, ".claude", "settings.json");
+    writeEnv(userFile, "32768");
+    const userBody = readFileSync(userFile, "utf8");
+    const project = path.join(user, "proj");
+    mkdirSync(project);
+    assert.ok(infoLine((await run(user, project)).text, "user settings").includes(userFile), "names the user settings file");
+    assert.equal(readFileSync(userFile, "utf8"), userBody, "doctor never writes the settings file");
+
+    const proj = tmp(t);
+    const projDir = path.join(proj, "proj");
+    const projFile = path.join(projDir, ".claude", "settings.json");
+    writeEnv(projFile, "1e9");
+    assert.ok(infoLine((await run(proj, projDir)).text, "project settings").includes(projFile), "names the project settings file");
+  });
 });
 
 describe("ADR-0010 ctx_upgrade tool", { concurrency: CONC }, () => {
@@ -3194,6 +3249,65 @@ describe("ADR-0026 OMP doctor: agent omp, OMP plugin store, OMP verbs, host-limi
     assert.equal(b.status, "FAIL", JSON.stringify(b));
     assert.equal(b.fixCommand, "omp plugin install context-mode");
     assert.ok(b.detail.includes(pkgFile(noDep)), b.detail);
+  });
+
+  // #1415 (D-OMP-STORE-PATH-1): OMP keeps its plugin store at (xdgData ?? configRoot)/plugins, configRoot = HOME/(PI_CONFIG_DIR
+  // or .omp). xdgData = $XDG_DATA_HOME/omp only on linux and darwin, only when that dir exists and the agent dir is OMP's default
+  // (PI_CODING_AGENT_DIR unset or <configRoot>/agent). mcp.json and config.yml stay in <configRoot>/agent. Expected paths come
+  // from OMP 19.1.1's own pi-utils src/dirs.ts run under the same env (the oracle table in D-OMP-STORE-PATH-1), not from our code.
+  const OMP_XDG_SKIP = process.platform === "win32" && "OMP reads XDG_DATA_HOME on linux and darwin only";
+  function installIn(storeDir) {
+    put(path.join(storeDir, "omp-plugins.lock.json"), { plugins: { "context-mode": { version: "2.2.2", enabled: true } }, settings: {} });
+    put(path.join(storeDir, "package.json"), { name: "omp-plugins", private: true, dependencies: { "context-mode": "2.2.2" } });
+  }
+  const ompStoreCases = (h) => {
+    const xdg = path.join(h, ".local", "share");
+    return [
+      { label: "XDG_DATA_HOME set and $XDG_DATA_HOME/omp exists", env: { XDG_DATA_HOME: xdg }, store: path.join(xdg, "omp", "plugins") },
+      { label: "reporter: XDG_DATA_HOME + PI_CONFIG_DIR=.config/pi", env: { XDG_DATA_HOME: xdg, PI_CONFIG_DIR: ".config/pi" }, store: path.join(xdg, "omp", "plugins") },
+      { label: "PI_CONFIG_DIR=.config/pi only", env: { PI_CONFIG_DIR: ".config/pi" }, store: path.join(h, ".config", "pi", "plugins") },
+      { label: "XDG_DATA_HOME set, no $XDG_DATA_HOME/omp dir", env: { XDG_DATA_HOME: path.join(h, "nope") }, store: path.join(h, ".omp", "plugins") },
+      { label: "XDG_DATA_HOME + non-default PI_CODING_AGENT_DIR turns XDG off", env: { XDG_DATA_HOME: xdg, PI_CODING_AGENT_DIR: path.join(h, "x") }, store: path.join(h, ".omp", "plugins"), xdgDir: true },
+      { label: "XDG_DATA_HOME + PI_CODING_AGENT_DIR = OMP's default agent dir keeps XDG", env: { XDG_DATA_HOME: xdg, PI_CODING_AGENT_DIR: path.join(h, ".omp", "agent") }, store: path.join(xdg, "omp", "plugins") },
+    ];
+  };
+
+  test("[#1415] D3 reads OMP's plugin store where OMP keeps it: $XDG_DATA_HOME/omp/plugins, the PI_CONFIG_DIR root, else ~/.omp/plugins", { skip: OMP_XDG_SKIP }, (t) => {
+    for (let i = 0; i < ompStoreCases("").length; i++) {
+      const home = tmp(t);
+      const c = ompStoreCases(home)[i];
+      if (c.xdgDir) mkdirSync(path.join(c.env.XDG_DATA_HOME, "omp"), { recursive: true });
+      installIn(c.store);
+      const d3 = checkHostConfig(OMP, envOf(home, c.env), home);
+      assert.equal(d3.status, "PASS", `${c.label}: ${JSON.stringify(d3)}`);
+      assert.equal(d3.detail, path.join(c.store, "omp-plugins.lock.json"), c.label);
+    }
+  });
+
+  test("[#1415] D3 FAIL under XDG names the lock file OMP reads, and the fix is OMP's own verb", { skip: OMP_XDG_SKIP }, (t) => {
+    const home = tmp(t);
+    const xdg = path.join(home, ".local", "share");
+    mkdirSync(path.join(xdg, "omp", "plugins"), { recursive: true });
+    const d3 = checkHostConfig(OMP, envOf(home, { XDG_DATA_HOME: xdg, PI_CONFIG_DIR: ".config/pi" }), home);
+    assert.equal(d3.status, "FAIL", JSON.stringify(d3));
+    assert.equal(d3.fixCommand, "omp plugin install context-mode");
+    assert.ok(d3.detail.includes(path.join(xdg, "omp", "plugins", "omp-plugins.lock.json")), d3.detail);
+    assert.equal(d3.detail.includes(path.join(home, ".omp")), false, d3.detail);
+  });
+
+  test("[#1415] the OMP import info line reads config.yml and mcp.json in <PI_CONFIG_DIR root>/agent; XDG never moves them", async (t) => {
+    const { ompInfoLines } = await import("../src/core/ops/doctor-config.ts");
+    const home = tmp(t);
+    const agentDir = path.join(home, ".config", "pi", "agent");
+    put(path.join(agentDir, "config.yml"), "enabledProviders: [claude]\n");
+    put(path.join(home, ".claude.json"), { mcpServers: { "context-mode": { command: "node", args: ["server.mjs"] } } });
+    const xdg = path.join(home, ".local", "share");
+    mkdirSync(path.join(xdg, "omp"), { recursive: true });
+    const info = C.OMP_IMPORT_INFO(path.join(home, ".claude.json"), path.join(agentDir, "mcp.json"));
+    const lines = ompInfoLines(envOf(home, { PI_CONFIG_DIR: ".config/pi", XDG_DATA_HOME: xdg }), undefined);
+    assert.ok(lines.includes(info), lines.join("\n"));
+    put(path.join(agentDir, "mcp.json"), { disabledServers: ["context-mode"] });
+    assert.equal(ompInfoLines(envOf(home, { PI_CONFIG_DIR: ".config/pi", XDG_DATA_HOME: xdg }), undefined).includes(info), false);
   });
 
   test("[ADR-0026 T29] lock says enabled false: D3 FAIL, fix omp plugin enable context-mode; the closing line names it", async (t) => {

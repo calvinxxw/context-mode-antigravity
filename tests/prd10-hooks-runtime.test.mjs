@@ -650,6 +650,159 @@ describe("PRD-v2 section 10: dispatch, replace and handle line (GP3, GP6)", () =
     assert.ok(Buffer.byteLength(u.content) < Buffer.byteLength(resp.content) && u.content.includes("needle target"));
   });
 
+  // D-1372-ORDERED-READ-1 (#1372, @limekiln): an external MCP tool returns one JSON document the agent needs whole.
+  // The replace keeps its stub (no new bytes on any replace); the way back is the pointer call, then each More: line.
+  // On main 47b03fcc that walk took 113 calls for 24,575 B (5 chunks of 48 B a page) and left 77% of a one-line JSON
+  // document unreachable. The pointer call now reads the document in order: at most ceil(S / OUTPUT_CAP) calls.
+  const DOC_RECORDS = Array.from({ length: 80 }, (_, i) => ({ id: "rec-" + String(i).padStart(4, "0"), title: "Item number " + i + " of the catalog",
+    status: i % 3 ? "open" : "closed", owner: "team-" + (i % 7), score: (i * 37) % 101, tags: ["alpha", "beta" + (i % 5)],
+    note: "end-" + String(i).padStart(4, "0") + " lorem ipsum dolor sit amet consectetur adipiscing elit sed do eiusmod" }));
+  const DOC_PRETTY = JSON.stringify({ kind: "document", count: 80, records: DOC_RECORDS }, null, 2);
+  const DOC_COMPACT = JSON.stringify({ kind: "document", count: 80, records: DOC_RECORDS });
+  const DOC_TOOL = "mcp__example__get_document";
+  // A call line (handle line or More: line) as arguments: keys unquoted, values JSON.
+  const callArgs = (line) => {
+    let t = line.slice(line.indexOf("ctx_search({") + "ctx_search(".length);
+    t = t.slice(0, t.indexOf("})") + 1);
+    for (const k of ["queries", "scope", "source", "offset"]) t = t.split("{" + k + ":").join('{"' + k + '":').split(", " + k + ":").join(', "' + k + '":');
+    return JSON.parse(t);
+  };
+
+  function replaceDoc(text, n) {
+    return cc({ hook_event_name: "PostToolUse", tool_name: DOC_TOOL, tool_input: {}, tool_use_id: "toolu_01Doc1372" + n, tool_response: [{ type: "text", text }] });
+  }
+
+  test("D-1372-ORDERED-READ-1 (#1372): the replace stub of an MCP JSON document is unchanged, byte for byte", async () => {
+    for (const [text, body] of [[DOC_PRETTY, '      "status": "open",\n\n        "beta4"\n      ],\n\n    }\n  ]\n}\n'], [DOC_COMPACT, ""]]) {
+      const p = replaceDoc(text, text.length);
+      const out = parsed(await handleHook("claude-code", p, env));
+      const replaced = out.updatedToolOutput[0].text;
+      const src = query("SELECT id FROM sources WHERE session_id = ?", p.session_id);
+      assert.equal(src.length, 1);
+      const id = "s" + Number(src[0].id).toString(36);
+      const handle = CCP + "ctx_search({queries:[" + JSON.stringify(DOC_TOOL) + "], source:" + JSON.stringify(id) + "}) searches the whole output (" + Buffer.byteLength(text) + " B).";
+      const twin = SEARCH_TWIN_LINE(join(dirname(process.argv[1]), SEARCH_WRAPPER_FILE), id, DOC_TOOL, realpathSync.native(repo));
+      assert.equal(replaced, body + handle + twin);
+    }
+  });
+
+  test("D-1372-ORDERED-READ-1 (#1372): the pointer and its More: lines give back the whole MCP JSON document in ceil(S / OUTPUT_CAP) calls", async () => {
+    for (const text of [DOC_PRETTY, DOC_COMPACT]) {
+      const S = Buffer.byteLength(text);
+      const p = replaceDoc(text, "w" + text.length);
+      const out = parsed(await handleHook("claude-code", p, env));
+      const replaced = out.updatedToolOutput[0].text;
+      const ctx = { project: resolveProject("claude-code", { env, argv: [], cwd: repo }), sessionId: p.session_id, turn: 1, signal: new AbortController().signal };
+      let args = callArgs(replaced.slice(replaced.lastIndexOf("\n") + 1));
+      let got = "";
+      let calls = 0;
+      let bytes = 0;
+      while (args !== null && calls < 200) {
+        const r = await ctxSearch.handler(args, ctx);
+        calls++;
+        bytes += Buffer.byteLength(r.text);
+        assert.equal(r.isError, false, r.text.slice(0, 300));
+        assert.ok(Buffer.byteLength(r.text) <= OUTPUT_CAP, "a reply fits OUTPUT_CAP: " + Buffer.byteLength(r.text));
+        // An ordered page: one head line, the next stored bytes, then a More: line when bytes are left.
+        const body = r.text.slice(r.text.indexOf("\n") + 1);
+        const more = body.lastIndexOf("\nMore: ");
+        got += more < 0 ? body : body.slice(0, more);
+        args = more < 0 ? null : callArgs(body.slice(more + 1));
+      }
+      const label = S + " B " + (text === DOC_PRETTY ? "pretty" : "compact");
+      assert.ok(got === text, label + ": the agent holds the whole document, byte for byte, after " + calls + " calls (" + Buffer.byteLength(got) + " B put together)");
+      assert.ok(calls <= Math.ceil(S / OUTPUT_CAP) + 1 && calls <= 2, label + ": " + calls + " calls");
+      assert.ok(bytes <= S + calls * 512, label + ": " + bytes + " reply bytes for the document");
+    }
+  });
+
+  // D-0027-LOSTBET-1 (ADR-0027 D3, RC4, FR5, AC4): the hook remembers a lost bet for the rest of the session. A lost bet
+  // is (b) a ranged Read of a file after its full Read was replaced in the same session, or (a) ctx_search page-ins on a
+  // replaced source that reach 50% or more of its bytes. Then a later output with the same tool key (Read: the path,
+  // Bash: the command, MCP: server + tool) passes whole up to OUTPUT_CAP. Another key, a new session, an output over
+  // OUTPUT_CAP (ADR-0008) and the first output after a compaction are replaced as before.
+  // Repro on main e84bc8fc and npm 2.2.2 (tickets r92-9002): the second full Read of F in S1 was replaced again.
+  const lostBetSession = () => "s-lostbet-" + Math.random().toString(36).slice(2);
+  function readPost(sessionId, filePath, content, range = {}) {
+    const n = content.split("\n").length;
+    return { session_id: sessionId, cwd: repo, hook_event_name: "PostToolUse", tool_name: "Read", tool_input: { file_path: filePath, ...range },
+      tool_use_id: "toolu_lb" + Math.random().toString(36).slice(2), tool_response: { type: "text", file: { filePath, content, numLines: n, startLine: 1, totalLines: n } } };
+  }
+  async function readOut(sessionId, filePath, content, range) {
+    return parsed(await handleHook("claude-code", readPost(sessionId, filePath, content, range), env));
+  }
+
+  test("D-0027-LOSTBET-1 (AC4 case b): after a ranged Read follows a replaced full Read of F, the next full Read of F in the session passes whole", async () => {
+    const content = bigText(REPLACE_TRIGGER_BYTES * 2);
+    assert.ok(Buffer.byteLength(content) > REPLACE_TRIGGER_BYTES && Buffer.byteLength(content) <= OUTPUT_CAP);
+    const F = join(repo, "lostbet-f.ts");
+    const G = join(repo, "lostbet-g.ts");
+    const S1 = lostBetSession();
+    assert.equal(typeof (await readOut(S1, F, content)).updatedToolOutput, "object", "the first full Read of F is a bet: replaced");
+    assert.equal(await readOut(S1, F, content, { offset: 120, limit: 40 }), null, "the ranged Read of F reaches the model whole (D-R41-READ-OFFSET-1)");
+    assert.equal(await readOut(S1, F, content), null, "the bet on F was lost in S1: the next full Read of F passes whole");
+    assert.equal(typeof (await readOut(S1, G, content)).updatedToolOutput, "object", "a full Read of another file G in S1 is still replaced");
+    assert.equal(typeof (await readOut(lostBetSession(), F, content)).updatedToolOutput, "object", "in a new session F is replaced again");
+  });
+
+  test("D-0027-LOSTBET-1 (AC4): after a lost bet, a full Read over OUTPUT_CAP is still replaced (ADR-0008)", async () => {
+    const content = bigText(OUTPUT_CAP * 2);
+    const F = join(repo, "lostbet-big.ts");
+    const S1 = lostBetSession();
+    assert.equal(typeof (await readOut(S1, F, content)).updatedToolOutput, "object");
+    assert.equal(await readOut(S1, F, content, { offset: 1, limit: 2000 }), null);
+    assert.equal(typeof (await readOut(S1, F, content)).updatedToolOutput, "object", "over OUTPUT_CAP the full Read stays replaced");
+  });
+
+  test("D-0027-LOSTBET-1 (AC4): a compaction clears the lost-bet marks of the session", async () => {
+    const content = bigText(REPLACE_TRIGGER_BYTES * 2);
+    const F = join(repo, "lostbet-compact.ts");
+    const S1 = lostBetSession();
+    assert.equal(typeof (await readOut(S1, F, content)).updatedToolOutput, "object");
+    assert.equal(await readOut(S1, F, content, { offset: 10, limit: 20 }), null);
+    assert.equal(await readOut(S1, F, content), null, "the lost bet on F holds before the compaction");
+    await handleHook("claude-code", { session_id: S1, cwd: repo, hook_event_name: "PreCompact", trigger: "auto" }, env);
+    await handleHook("claude-code", { session_id: S1, cwd: repo, hook_event_name: "SessionStart", source: "compact" }, env);
+    assert.equal(typeof (await readOut(S1, F, content)).updatedToolOutput, "object", "after the compaction the full Read of F is a bet again");
+  });
+
+  test("D-0027-LOSTBET-1 (AC4 case a): a ctx_search page-in of 50% or more of a replaced MCP or Bash output marks its tool key", async () => {
+    const doc = JSON.stringify({ kind: "document", records: DOC_RECORDS.slice(0, 30) });
+    const log = bigText(REPLACE_TRIGGER_BYTES * 2);
+    for (const s of [doc, log]) assert.ok(Buffer.byteLength(s) > REPLACE_TRIGGER_BYTES && Buffer.byteLength(s) <= OUTPUT_CAP);
+    const mcp = (sessionId, tool) => ({ session_id: sessionId, cwd: repo, hook_event_name: "PostToolUse", tool_name: tool, tool_input: {},
+      tool_use_id: "toolu_lbm" + Math.random().toString(36).slice(2), tool_response: [{ type: "text", text: doc }] });
+    const bash = (sessionId, command) => ({ session_id: sessionId, cwd: repo, hook_event_name: "PostToolUse", tool_name: "Bash", tool_input: { command },
+      tool_use_id: "toolu_lbb" + Math.random().toString(36).slice(2), tool_response: { stdout: log, stderr: "", interrupted: false, isImage: false } });
+    const pointerText = (out) => (Array.isArray(out.updatedToolOutput) ? out.updatedToolOutput[0].text : replacedText(out.updatedToolOutput));
+    const cases = [
+      { name: "MCP", same: (sid) => mcp(sid, "mcp__lostbet__get_document"), other: (sid) => mcp(sid, "mcp__lostbet__list_documents") },
+      { name: "Bash", same: (sid) => bash(sid, "make lostbet-build"), other: (sid) => bash(sid, "make lostbet-check") },
+    ];
+    for (const c of cases) {
+      const S1 = lostBetSession();
+      const first = parsed(await handleHook("claude-code", c.same(S1), env));
+      assert.notEqual(first, null, c.name + ": the first output is a bet: replaced");
+      const pointer = pointerText(first).split("\n").find((l) => l.includes(CCP + "ctx_search({"));
+      assert.ok(pointer !== undefined, c.name + ": the stub names the ctx_search call");
+      const ctx = { project: resolveProject("claude-code", { env, argv: [], cwd: repo }), sessionId: S1, turn: 2, signal: new AbortController().signal };
+      let args = callArgs(pointer);
+      let paged = 0;
+      for (let calls = 0; args !== null && calls < 4; calls++) {
+        const r = await ctxSearch.handler(args, ctx);
+        assert.equal(r.isError, false, r.text.slice(0, 300));
+        const more = r.text.lastIndexOf("\nMore: ");
+        paged += Buffer.byteLength(r.text.slice(r.text.indexOf("\n") + 1, more < 0 ? undefined : more));
+        args = more < 0 ? null : callArgs(r.text.slice(more + 1));
+      }
+      const size = Buffer.byteLength(c.name === "MCP" ? doc : log);
+      assert.ok(paged * 2 >= size, c.name + ": the page-in reached " + paged + " of " + size + " B, a lost bet");
+      assert.equal(parsed(await handleHook("claude-code", c.same(S1), env)), null, c.name + ": the bet on this key was lost in S1: the next output passes whole");
+      assert.notEqual(parsed(await handleHook("claude-code", c.other(S1), env)), null, c.name + ": another key in S1 is still replaced");
+      assert.notEqual(parsed(await handleHook("claude-code", c.same(lostBetSession()), env)), null, c.name + ": in a new session the key is replaced again");
+    }
+  });
+
   // D-1402-PLUGIN-CALL-1 (#1402): a plugin mod's $.mcp.call gets a toolu_plugin_ id from the host, and its result goes
   // back to the mod only, never to the model. The mod gets the output whole (it may JSON.parse it); the text is indexed.
   test("D-1402-PLUGIN-CALL-1: a large MCP result of a plugin call (toolu_plugin_) reaches the mod whole and is indexed", async () => {
@@ -979,6 +1132,15 @@ describe("PRD-v2 section 10: dispatch, replace and handle line (GP3, GP6)", () =
 });
 
 // serial: sets process.env.HOME in before(); process.env is shared by every test in the file
+// A compaction happens in a long session: fill the journal so BM25 IDF is that of a real session (recall tests).
+const FILLER = [
+  "rename the config loader", "update the changelog for the release", "bump the version in package.json",
+  "add a retry to the http client", "write docs for the cli flags", "move the date helpers to utils",
+  "check the coverage report", "split the large router file", "tidy the readme headings",
+  "add a test for the date parser", "remove the unused logger import", "sort the imports in main",
+];
+const ASK_ERROR = "why did the zebraquux migration fail with ETIMEDOUT";
+
 describe("PRD-v2 section 10: compaction delivery, recall and decision rows (GP6)", () => {
   // Unit tests for the M4 branches of src/core/hooks/dispatch.ts: compactSummary "none" delivery through
   // renderState (impl/09 §4.3 step 1.2-1.3, §4.4 step 2.4; DECISIONS-r6 D6) and the ADR-0009 §8.2 decision
@@ -1123,14 +1285,6 @@ describe("PRD-v2 section 10: compaction delivery, recall and decision rows (GP6)
 
   // ---------- turn-boundary recall (DECISIONS-r11 B) ----------
 
-  // A compaction happens in a long session: fill the journal so BM25 IDF is that of a real session.
-  const FILLER = [
-    "rename the config loader", "update the changelog for the release", "bump the version in package.json",
-    "add a retry to the http client", "write docs for the cli flags", "move the date helpers to utils",
-    "check the coverage report", "split the large router file", "tidy the readme headings",
-    "add a test for the date parser", "remove the unused logger import", "sort the imports in main",
-  ];
-
   async function longSession(agent, s, promptEvent) {
     for (const p of [...FILLER, ...FILLER]) await handleHook(agent, payload(s, { hook_event_name: promptEvent, prompt: p }), env);
     await handleHook(agent, payload(s, {
@@ -1139,8 +1293,6 @@ describe("PRD-v2 section 10: compaction delivery, recall and decision rows (GP6)
     }), env);
     await waitRows("SELECT seq FROM events WHERE session_id = ?", [s], 2 * FILLER.length + 1);
   }
-
-  const ASK_ERROR = "why did the zebraquux migration fail with ETIMEDOUT";
 
   test("[M7] recall/no-compaction-zero-bytes: a prompt naming an earlier error adds nothing before a compaction", async () => {
     const s = sid();
@@ -2000,6 +2152,11 @@ describe("PRD-v2 section 10: hook entry argv and stdin handling (GP7)", () => {
     const full = lines.join("\n");
     const post = { session_id: "lk2", cwd: repo, hook_event_name: "PostToolUse", tool_name: "Bash", tool_use_id: "toolu_lk2",
       tool_input: { command: "cat big.log", description: "big log" }, tool_response: { stdout: full, stderr: "", interrupted: false } };
+    // D-1401-LOCK-BASELINE-1: the same 200 KB PostToolUse with no lock (another session), run before, after and once more
+    // in this test, is the baseline: runner load slows both the same way. The lock may add under HOOK_TIMEOUT_MS / 2 to
+    // the median baseline; a hook that waits for the lock (DB_TIMEOUT_MS) adds 5000 ms and fails.
+    const free = (n) => timedRun(JSON.stringify({ ...post, session_id: "lk2b", tool_use_id: "toolu_lk2b" + n }));
+    const base = [free(1)];
     const release = await holdWriteLock(projectDb());
     let r;
     try {
@@ -2007,8 +2164,12 @@ describe("PRD-v2 section 10: hook entry argv and stdin handling (GP7)", () => {
     } finally {
       await release();
     }
+    base.push(free(2), free(3));
+    for (const b of base) assert.equal(b.status, 0, b.stderr);
+    const baseMs = base.map((b) => b.ms).sort((a, b) => a - b)[1];
     assert.equal(r.status, 0, r.stderr);
-    assert.ok(r.ms < HOOK_TIMEOUT_MS / 2, `hook took ${r.ms} ms under a held write lock (host kills it at ${HOOK_TIMEOUT_MS} ms); stderr: ${r.stderr}`);
+    assert.ok(r.ms < HOOK_TIMEOUT_MS, `hook took ${r.ms} ms under a held write lock; the host kills it at ${HOOK_TIMEOUT_MS} ms; stderr: ${r.stderr}`);
+    assert.ok(r.ms - baseMs < HOOK_TIMEOUT_MS / 2, `the held lock added ${r.ms - baseMs} ms (${r.ms} ms against a median of ${baseMs} ms with no lock: ${base.map((b) => b.ms).join(", ")}); stderr: ${r.stderr}`);
     // Savings hold under the lock: the model gets a short replace that names the indexed output, not the full 200 KB.
     assert.notEqual(r.stdout, "", "a replace decision, not an empty answer: " + r.stderr);
     const out = JSON.parse(r.stdout).hookSpecificOutput.updatedToolOutput;
@@ -2020,6 +2181,48 @@ describe("PRD-v2 section 10: hook entry argv and stdin handling (GP7)", () => {
     assert.deepEqual(src.map((x) => x.bytes_total), [Buffer.byteLength(full)], "one source row for the output");
     assert.ok(readRows("SELECT ord FROM chunks WHERE source_id = ?", src[0].id).length > 0, "chunks stored");
     assert.ok(readRows("SELECT ord FROM line_units WHERE source_id = ?", src[0].id).length > 0, "line units stored");
+  });
+
+  // #1401 follow-up (@ryanleecode, systemfsoftware/context-mode#4): after a compaction, a prompt runs recall
+  // (DECISIONS-r11 B). Another process holds the write lock (a second session indexes an output): the prompt still
+  // gets its recall block, fast, and the row still goes out once per session (the seen marker lands after the lock).
+  test("#1401: a compacted-session UserPromptSubmit under a held write lock still returns the recall block, once", async () => {
+    const s = "lk3";
+    const ups = (prompt) => JSON.stringify({ session_id: s, cwd: repo, hook_event_name: "UserPromptSubmit", prompt });
+    for (const p of [...FILLER, ...FILLER]) assert.equal(timedRun(ups(p)).status, 0);
+    assert.equal(timedRun(JSON.stringify({ session_id: s, cwd: repo, hook_event_name: "PostToolUse", tool_name: "Bash",
+      tool_use_id: "toolu_lk3", tool_input: { command: "npm run migrate:zebraquux" },
+      tool_response: { stdout: "", stderr: "zebraquux migration failed: ETIMEDOUT connecting to db-replica-7", is_error: true } })).status, 0);
+    let err = [];
+    for (const end = Date.now() + 5000; err.length === 0 && Date.now() < end; await new Promise((r) => setTimeout(r, 20))) {
+      err = readRows("SELECT seq FROM events WHERE session_id = ? AND kind = 'toolerr'", s);
+    }
+    assert.equal(err.length, 1, "the toolerr row is in the journal");
+    const compact = timedRun(JSON.stringify({ session_id: s, cwd: repo, hook_event_name: "SessionStart", source: "compact" }));
+    assert.equal(compact.status, 0, compact.stderr);
+    assert.notEqual(compact.stdout, "", "the state block after the compaction");
+    const release = await holdWriteLock(projectDb());
+    let r;
+    try {
+      r = timedRun(ups(ASK_ERROR));
+    } finally {
+      await release();
+    }
+    assert.equal(r.status, 0, r.stderr);
+    assert.ok(r.ms < HOOK_TIMEOUT_MS / 2, `hook took ${r.ms} ms under a held write lock; stderr: ${r.stderr}`);
+    assert.equal(r.stderr, "", "no hook error under the lock");
+    assert.notEqual(r.stdout, "", "the recall block, not an empty answer");
+    const text = JSON.parse(r.stdout).hookSpecificOutput.additionalContext;
+    assert.ok(text.startsWith(RECALL_OPEN_TAG + "\n") && text.endsWith("\n" + RECALL_CLOSE_TAG), text);
+    assert.ok(text.includes("#" + err[0].seq + " toolerr Bash: "), text);
+    assert.ok(text.includes("zebraquux migration failed: ETIMEDOUT connecting to db-replica-7"), text);
+    // The lock is free: the same question does not send the row again, and the prompt row written under the lock is kept.
+    const again = timedRun(ups(ASK_ERROR));
+    assert.equal(again.status, 0, again.stderr);
+    const next = again.stdout === "" ? null : JSON.parse(again.stdout).hookSpecificOutput.additionalContext;
+    assert.ok(next === null || !next.includes("#" + err[0].seq + " "), "row sent twice: " + String(next));
+    const asked = readRows("SELECT body FROM events WHERE session_id = ? AND kind = 'prompt' AND body = ?", s, ASK_ERROR);
+    assert.equal(asked.length, 2, "both prompt rows are in the journal");
   });
 
   test("GP7/codex-session-project-dir: codex sessions in X and Y write to their own project", () => {

@@ -7,7 +7,7 @@ import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { AGENT_IDS, type AgentId } from "../contracts/agents.ts";
 import {
   ANTIGRAVITY_PLUGIN_ROOT_ENV,
-  COMPACTED_META_PREFIX, COMPACT_POINTER_LINE, COMPACT_STATE_KEY, DECISION_OPTION_KEY, DECISION_SOURCE, DECISION_TOOL, EDIT_PATH_KEYS, EDIT_TOOLS, EXIT_CODE_LINE_PREFIX,
+  COMPACTED_META_PREFIX, COMPACT_POINTER_LINE, OUTPUT_CAP, COMPACT_STATE_KEY, DECISION_OPTION_KEY, DECISION_SOURCE, DECISION_TOOL, EDIT_PATH_KEYS, EDIT_TOOLS, EXIT_CODE_LINE_PREFIX,
   OWN_TOOL_PREFIX, MCP_SERVER_TOOL_PREFIX, PLUGIN_CALL_ID_PREFIX, prefixToolNames, MAX_CHUNK_BYTES, REPLACE_CHUNK_BYTES, REPLACE_HANDLE_LINE, REPLACE_RETURN_BYTES, REPLACE_TRIGGER_BYTES, RANGE_READ_TOOLS, READ_PATH_KEYS, SKILL_LOAD_TOOLS, READ_RANGE_KEYS, SHAPE_RETURN_BYTES, PARSE_ERROR_DENY_LINE, PENDING_COMPACT_FLAG, PENDING_COMPACT_KEY,
   PENDING_COMPACT_META_PREFIX, POLICY_UNREADABLE_LINE, RECALL_KEY, RECALL_MAX_ROWS, RECALL_SEEN_META_PREFIX, RECALL_UNIT_CANDIDATES, RECALL_UNITS_SEEN_META_PREFIX, RESUME_HINT, RESUME_HINT_KEY, RUN_WRAPPER_FILE,
   RUN_WRAPPER_AGENT, RUN_WRAPPER_NODE, PERSISTED_FILE_LINE, SEARCH_TWIN_LINE, SEARCH_WRAPPER_FILE, SUBAGENT_HANDLE_LINE, ECHO_MAX_BYTES, SHELL_TOOL, SOURCE_LABEL_MAX_CHARS, SUBAGENT_SOURCE_PREFIX, SYNC_INDEX_MAX_BYTES, TOOL_PREFIX_SLOT,
@@ -28,6 +28,7 @@ import { resolveProject } from "../project/resolve.ts";
 import { claudeDirOf, homeDirOf } from "../project/config-dir.ts";
 import { isInside } from "../project/contain.ts";
 import { metaGet, metaSet, metaTake } from "../store/db.ts";
+import { betKeyOfLabel, clearLostBets, hasBet, isLostBet, markLostBet, noteBet } from "../store/lost-bet.ts";
 import { canonicalKey } from "../journal/append.ts";
 import { hasAgentRows, hasSessionRows, lastSessionSeq, readLastPrompt, readMaxSeq, readRecallRows, readSessionEvents } from "../journal/read.ts";
 import { queryUnits, readMaxSourceId, recallQueryText, reserveSource, sourceHandle, type SourceDraft } from "../store/fts.ts";
@@ -37,7 +38,7 @@ import { chunkText } from "../index/chunk.ts";
 import { moreLine, selectChunksInMemory } from "../index/select.ts";
 import { shapeDigest } from "../index/shape.ts";
 import { appendDetached } from "./detached.ts";
-import { hookDb, isBusy, spool, writeDetached, writeOrSpool, type SpoolOp } from "./spool.ts";
+import { hookDb, isBusy, readSeen, spool, writeDetached, writeOrSpool, type SpoolOp } from "./spool.ts";
 import { askedWords } from "./handle-query.ts";
 import { answerDecisions, askOptionLabels, optionEchoDecision, type DecisionPart } from "./decision.ts";
 import { shouldHint } from "./throttle.ts";
@@ -178,6 +179,7 @@ function compactText(db: DbHandle, ev: CanonicalHookEvent, row: AdapterRow): str
 
 async function sessionStart(ev: CanonicalHookEvent, row: AdapterRow, project: ProjectContext): Promise<Decision> {
   if (ev.source === "compact" && hasRecall(row)) markCompacted(await hookDb(project), ev.sessionId);
+  if (ev.source === "compact") endLostBets(await hookDb(project), ev.sessionId); // D-0027-LOSTBET-1
   if (ev.source === "compact" && row.compactDelivery === "sessionstart") {
     const db = await hookDb(project);
     // A23, #1396: the host sends one SessionStart(compact) per compaction with the same session id. The
@@ -279,26 +281,6 @@ function compactBoundary(value: string): { seq: number; source: number } {
   }
 }
 
-function seenSeqs(value: string | null): number[] {
-  if (value === null) return [];
-  try {
-    const v = JSON.parse(value) as unknown;
-    return Array.isArray(v) ? v.filter((n): n is number => typeof n === "number") : [];
-  } catch {
-    return [];
-  }
-}
-
-function seenUnitKeys(value: string | null): string[] {
-  if (value === null) return [];
-  try {
-    const v = JSON.parse(value) as unknown;
-    return Array.isArray(v) ? v.filter((k): k is string => typeof k === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
 // No compaction in this session (or a row without UserPromptSubmit additionalContext): ALLOW, zero added
 // bytes. After one: BM25 of this session's rows and the same worktree's prior-session rows against the
 // prompt; whole rows over RECALL_MIN_SCORE, within RECALL_BUDGET_BYTES; a row goes out once per session.
@@ -309,16 +291,18 @@ async function recall(ev: CanonicalHookEvent, row: AdapterRow, project: ProjectC
   if (compacted === null) return ALLOW;
   const boundary = compactBoundary(compacted);
   const seenKey = RECALL_SEEN_META_PREFIX + ev.sessionId;
-  const seen = seenSeqs(metaGet(db, seenKey));
+  const seen = readSeen(project, db, seenKey).filter((n): n is number => typeof n === "number");
   // r3-ledger: one ranked query over this session's line units, by the current prompt only (D-1330-RECALL-PROMPT-1).
   const unitsKey = RECALL_UNITS_SEEN_META_PREFIX + ev.sessionId;
-  const seenUnits = seenUnitKeys(metaGet(db, unitsKey));
+  const seenUnits = readSeen(project, db, unitsKey).filter((k): k is string => typeof k === "string");
   const units = queryUnits(db, ev.sessionId, recallQueryText(prompt), RECALL_UNIT_CANDIDATES, boundary.source);
   const rows = readRecallRows(db, ev.sessionId, project.worktree, RECALL_MAX_ROWS, boundary.seq);
   const picked = pickRecall(rows, prompt, new Set(seen), units, new Set(seenUnits));
   if (picked.text === "") return ALLOW;
-  if (picked.seqs.length > 0) metaSet(db, seenKey, JSON.stringify([...seen, ...picked.seqs]));
-  if (picked.units !== undefined) metaSet(db, unitsKey, JSON.stringify([...seenUnits, ...picked.units]));
+  // D-1401-SEEN-SPOOL-1 (#1401): the prompt path takes no write lock. The sent-once lists are written detached, like
+  // the prompt row; under another writer's lock they wait in the spool, and readSeen reads them back from there.
+  if (picked.seqs.length > 0) writeDetached(project, { t: "seen", key: seenKey, add: picked.seqs }, "recall");
+  if (picked.units !== undefined) writeDetached(project, { t: "seen", key: unitsKey, add: picked.units }, "recall");
   return { kind: "hint", text: picked.text, onceKey: RECALL_KEY };
 }
 
@@ -533,8 +517,11 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   tool: ToolCall, result: ToolResultInfo, text: string, persistedFile?: string): Promise<Decision> {
   // step 5: replace, DECISIONS-r9 F1 split. Subagent case B/C (ADR-0016), and the main agent on a row
   // with a replace channel ("run, then replace", D-M7-RR-1, DECISIONS-r10 (1)).
+  if (boundedRead(tool)) { // D-R41-READ-OFFSET-1 (#1314): the user asked for these lines
+    await rangedAfterBet(ev, row, project, tool); // D-0027-LOSTBET-1 case b
+    return ALLOW;
+  }
   if (result.bytes <= REPLACE_TRIGGER_BYTES) return ALLOW; // D-M7-SV-1
-  if (boundedRead(tool)) return ALLOW; // D-R41-READ-OFFSET-1 (#1314): the user asked for these lines
   if (ompRangedRead(ev, tool)) return ALLOW; // D-1392-OMP-RANGE-1 (#1392): the same window, written in the path
   if (ownRead(ev, tool, env)) return ALLOW; // D-R48-OWN-FILE-1 (#1326): a skill or rule file reaches the model whole
   if (SKILL_LOAD_TOOLS.includes(tool.canonicalName)) return ALLOW; // D-1404-SKILL-LOAD-1 (#1404): a loaded skill joins the prompt whole
@@ -576,6 +563,10 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // D-1401-SPOOL-1 (#1401): under another process's write lock the write goes to the project spool and the next
   // hook write applies it. A source row not written yet has no id, so the handle is its label (pickSource reads both).
   const db = await hookDb(project);
+  // D-0027-LOSTBET-1 (ADR-0027 D3, FR5): the bet on this tool key was lost in this session, so the output passes
+  // whole up to OUTPUT_CAP (one primary-key lookup). Over OUTPUT_CAP it is still replaced (ADR-0008).
+  const betOn = betKey(ev, tool);
+  if (result.bytes <= OUTPUT_CAP && betOn !== "" && isLostBet(db, ev.sessionId, betOn)) return ALLOW;
   const op: SpoolOp = { t: "src", id: null, src: sourceRowOf(project, ev.sessionId, label), text, max: REPLACE_CHUNK_BYTES, units: true };
   let sourceId: number | null;
   if (result.bytes <= SYNC_INDEX_MAX_BYTES) {
@@ -588,6 +579,8 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // model, so the mod gets the output whole (it may JSON.parse it). The text is indexed above; model calls stay replaced.
   if (pluginMcpCall(tool)) return ALLOW;
   const handle = sourceId === null ? label : sourceHandle(sourceId);
+  // D-0027-LOSTBET-1 case b: note the bet on a full Read of this file, so a later ranged Read of it marks a lost bet.
+  if (RANGE_READ_TOOLS.includes(tool.canonicalName) && betOn !== "" && !hasBet(db, ev.sessionId, betOn)) noteBet(db, ev.sessionId, betOn, handle);
   // D-M7-SV-5: rank by the intent and the session's last user prompt (any word), so a bare cat still
   // returns the line the user asked for. The more line keeps the intent. No prompt -> intent alone.
   const prompt = await lastPrompt(project, ev.sessionId);
@@ -616,6 +609,31 @@ async function postReplace(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
 }
 
 type Caller = { ctx: boolean; shell: boolean; read: boolean };
+
+// D-0027-LOSTBET-1: the tool key of an output. A read-like tool: its path, resolved against the cwd, so the full and the
+// ranged Read of one file share it. Any other tool: the key its main-session source label carries (the command for a
+// shell, server + tool for MCP), so the ctx_search page-in (case a) and the hook name the same key. Else "": no memory.
+function betKey(ev: CanonicalHookEvent, tool: ToolCall): string {
+  if (RANGE_READ_TOOLS.includes(tool.canonicalName)) {
+    const p = READ_PATH_KEYS.map((k) => tool.input[k]).find((v): v is string => typeof v === "string" && v !== "");
+    return p === undefined ? "" : tool.canonicalName + ":" + resolve(ev.cwd, p);
+  }
+  return betKeyOfLabel(mainLabel(tool, ev)) ?? "";
+}
+
+// D-0027-LOSTBET-1 case b (ADR-0027 FR5): a ranged Read of a file whose full Read was replaced in this session is a lost
+// bet on that file. Two primary-key lookups; the mark is written once. A failure leaves the bet as today (section 12).
+async function rangedAfterBet(ev: CanonicalHookEvent, row: AdapterRow, project: ProjectContext, tool: ToolCall): Promise<void> {
+  if (ev.sessionId === "" || !hasReplace(row)) return;
+  const key = betKey(ev, tool);
+  if (key === "") return;
+  try {
+    const db = await hookDb(project);
+    if (hasBet(db, ev.sessionId, key) && !isLostBet(db, ev.sessionId, key)) markLostBet(db, ev.sessionId, key, "ranged-read", tool.callId ?? "");
+  } catch {
+    // ADR-0027 section 12: never blocks the tool
+  }
+}
 
 // D-1402-PLUGIN-CALL-1: MCP tools only. An Agent call a plugin serves for the model may carry the same id prefix.
 function pluginMcpCall(tool: ToolCall): boolean {
@@ -783,7 +801,17 @@ async function preCompact(ev: CanonicalHookEvent, row: AdapterRow, project: Proj
   const db = await hookDb(project);
   metaSet(db, PENDING_COMPACT_META_PREFIX + ev.sessionId, PENDING_COMPACT_FLAG);
   if (hasRecall(row)) markCompacted(db, ev.sessionId);
+  endLostBets(db, ev.sessionId); // D-0027-LOSTBET-1
   return ALLOW;
+}
+
+// D-0027-LOSTBET-1 (ADR-0027 10.6): a compaction ends Passing; the next output with a marked key is a bet again.
+function endLostBets(db: DbHandle, sessionId: string): void {
+  try {
+    clearLostBets(db, sessionId);
+  } catch {
+    // ADR-0027 section 12: a failed clear never blocks the compaction; the marks stay
+  }
 }
 
 // ---------- Usage (D-M5-arch-2) ----------
