@@ -9,7 +9,6 @@
 > The Context Mode plugin is free and local, with its source open on GitHub. **Context Mode Gateway** is a separate hosted service with its own account and subscription. It takes the same idea from tool output to the whole conversation: Gateway Recall keeps long sessions searchable, and Gateway Memory shares what your agents learn across sessions and tools. [See how the Gateway works](https://contextmode.ai/docs/how-saving-works?utm_source=github&utm_medium=readme&utm_content=quote)
 
 **Google Antigravity Native Adaptation (App · CLI `agy` · IDE)** — First-class native plugin adaptation synced automatically with upstream `mksglu/context-mode` via GitHub Actions.
-**Google Antigravity 原生适配插件版**：本仓库为 Google Antigravity（App / CLI `agy` / IDE 通用）提供一等原生插件适配，并通过 GitHub Actions 自动同步上游更新。
 
 ```sh
 agy plugin install https://github.com/calvinxxw/context-mode
@@ -17,7 +16,7 @@ agy plugin install https://github.com/calvinxxw/context-mode
 
 - **Native plugin & hooks:** `.antigravity-plugin/plugin.json`, `mcp_config.json`, `hooks.json` (`SessionStart`, `PreInvocation`, `PreToolUse`, `PostToolUse`), PascalCase tool normalization, and `/ctx-doctor`, `/ctx-stats`, `/ctx-upgrade` skills.
 - **Direct MCP hot path & workspace resolution:** 5 hot-path tools (`ctx_execute`, `ctx_batch`, `ctx_index`, `ctx_search`, `ctx_resume`) configured `eager: true`, 3-tier workspace & `conversationId` resolution (`roots/list` + hook handoff), `PreInvocation` deduplication, and Windows UTF-8/GB18030 sandbox decoding.
-- **Details:** [Antigravity 原生适配开发说明 / Adaptation Guide](docs/architecture/antigravity-adaptation.md) · [Install & verify steps](#install-antigravity)
+- **Details:** [Antigravity Adaptation Guide](docs/architecture/antigravity-adaptation.md) · [Install & verify steps](#install-antigravity)
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/readme/hero-dark.png">
