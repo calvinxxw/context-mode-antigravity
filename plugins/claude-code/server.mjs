@@ -28283,7 +28283,6 @@ var BACKGROUND_HOLD_NOTE = "note: the command ended while a background process s
 var CANCELLED_LINE = "Cancelled.";
 var BACKGROUND_REPLY_PREFIX = "started in background, pid ";
 var PLAIN_OUTPUT_ENV = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" });
-var UTF8_OUTPUT_ENV = Object.freeze({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" });
 var RUN_LABEL_PREFIX = "run.mjs:";
 var RUN_SESSION_PREFIX = "mcp:";
 var HOST_SESSION_ENV = Object.freeze({ "claude-code": "CLAUDE_CODE_SESSION_ID" });
@@ -28475,7 +28474,7 @@ function PURGE_SUMMARY(rows, scope) {
 var DECISION_SOURCE = "decision";
 var DECISION_USER_LABEL = "decision (user)";
 var RELEASE_REPO_URL = "https://github.com/mksglu/context-mode.git";
-var BUNDLE_SHA = true ? "2065c0ffdf89b0ee88637c5095bff88d6bce0039" : void 0;
+var BUNDLE_SHA = true ? "cd8c0d231998b7742e15c8dea9113b6f4471f90f" : void 0;
 var DOCTOR_CHECK_ORDER = Object.freeze(["D1", "D2", "D3", "D4", "D5", "D5b", "D6", "D7", "D8", "D9", "D10", "D11"]);
 var DOCTOR_LABEL = Object.freeze({
   D1: "version",
@@ -44444,6 +44443,7 @@ function isStripped(key) {
   if (STRIPPED_KEYS.includes(name)) return true;
   return name.startsWith(NODE_PREFIX) && name.endsWith(OPTIONS_SUFFIX);
 }
+var UTF8_DEFAULTS = Object.freeze({ PYTHONUTF8: "1" });
 function buildChildEnv(parent, extra) {
   const env = {};
   for (const key of Object.keys(parent)) {
@@ -44451,6 +44451,8 @@ function buildChildEnv(parent, extra) {
     if (value === void 0 || isStripped(key)) continue;
     env[key] = value;
   }
+  const names = new Set(Object.keys(env).map((key) => key.toUpperCase()));
+  for (const key of Object.keys(UTF8_DEFAULTS)) if (!names.has(key)) env[key] = UTF8_DEFAULTS[key];
   if (extra !== void 0) {
     for (const key of Object.keys(extra)) env[key] = extra[key];
   }
@@ -45308,7 +45310,7 @@ async function runCommand(cmd, shell, ctx, deadline, boundMs) {
   if (left <= 0) return stoppedAt(cmd, formatError3("TIMEOUT", { ms: boundMs }));
   const r = await runProcess([shell, SHELL_INLINE_FLAG, cmd], {
     cwd: ctx.project.worktree,
-    env: buildChildEnv(process.env, { ...UTF8_OUTPUT_ENV }),
+    env: buildChildEnv(process.env),
     signal: ctx.signal,
     timeoutMs: left
   });
@@ -54112,7 +54114,7 @@ async function handler3(raw, ctx) {
   if (!parsed.success) return fail4(schemaLine(parsed.error.issues[0]));
   const input = parsed.data;
   const cwd = ctx.project.worktree;
-  const extra = { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV };
+  const extra = { ...PLAIN_OUTPUT_ENV };
   if (input.file !== void 0) {
     const abs = resolve8(cwd, input.file);
     const bad = fileError(input.file, abs, ctx.project.containmentRoot, ctx.hostRoots);

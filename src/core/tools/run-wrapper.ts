@@ -27,7 +27,6 @@ import {
   shellWord,
   SOURCE_LABEL_MAX_CHARS,
   USER_DENY_REASON_PREFIX,
-  UTF8_OUTPUT_ENV,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
 import type { CanonicalHookEvent, ProjectContext } from "../contracts/types.ts";
@@ -127,7 +126,7 @@ export async function runWrapperMain(argv: string[], env: NodeJS.ProcessEnv): Pr
     const project = projectOf(argv, cwd);
     const r = await runProcess([runtime, "-c", command], {
       cwd,
-      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV }),
+      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV }),
       signal: new AbortController().signal,
       timeoutMs: EXEC_TIMEOUT_MS,
     });

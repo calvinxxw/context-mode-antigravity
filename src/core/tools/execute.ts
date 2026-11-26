@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, parse, resolve } from "node:path";
 import { z } from "zod/v4";
 import {
-  BACKGROUND_HOLD_NOTE, BACKGROUND_REPLY_PREFIX, CANCELLED_LINE, EXEC_LANGUAGES, EXEC_PREVIEW_BYTES, EXEC_TIMEOUT_MS, OUTPUT_CAP, PLAIN_OUTPUT_ENV, SHELL_FAMILY, SOURCE_LABEL_MAX_CHARS, UTF8_OUTPUT_ENV,
+  BACKGROUND_HOLD_NOTE, BACKGROUND_REPLY_PREFIX, CANCELLED_LINE, EXEC_LANGUAGES, EXEC_PREVIEW_BYTES, EXEC_TIMEOUT_MS, OUTPUT_CAP, PLAIN_OUTPUT_ENV, SHELL_FAMILY, SOURCE_LABEL_MAX_CHARS,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
 import type { ExecuteInput, JournalFacts, ToolContext, ToolReply } from "../contracts/types.ts";
@@ -174,7 +174,7 @@ async function handler(raw: ExecuteInput, ctx: ToolContext): Promise<ToolReply> 
   const input: ExecuteInput = parsed.data;
   // Steps 2-3.
   const cwd = ctx.project.worktree;
-  const extra: Record<string, string> = { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV };
+  const extra: Record<string, string> = { ...PLAIN_OUTPUT_ENV };
   if (input.file !== undefined) {
     const abs = resolve(cwd, input.file);
     const bad = fileError(input.file, abs, ctx.project.containmentRoot, ctx.hostRoots);

@@ -161,7 +161,6 @@ var DB_FILE_NAME = "context.db";
 var EXEC_LANGUAGES = Object.freeze(["shell", "powershell", "javascript", "typescript", "python"]);
 var SHELL_FAMILY = Object.freeze(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
 var PLAIN_OUTPUT_ENV = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" });
-var UTF8_OUTPUT_ENV = Object.freeze({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" });
 var HOST_SESSION_ENV = Object.freeze({ "claude-code": "CLAUDE_CODE_SESSION_ID" });
 var HOST_SESSION_META = Object.freeze({ zcode: "session_id" });
 var NODE_MIN = "24.15.0";

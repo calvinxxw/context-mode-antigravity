@@ -185,7 +185,6 @@ var SHELL_FAMILY = Object.freeze(["sh", "bash", "zsh", "dash", "ksh", "fish"]);
 var PATHEXT_DEFAULT = ".COM;.EXE;.BAT;.CMD";
 var SOURCE_LABEL_MAX_CHARS = 80;
 var PLAIN_OUTPUT_ENV = Object.freeze({ NO_COLOR: "1", FORCE_COLOR: "0" });
-var UTF8_OUTPUT_ENV = Object.freeze({ PYTHONUTF8: "1", PYTHONIOENCODING: "utf-8" });
 var RUN_USAGE_LINE = "Usage: run.mjs <base64>";
 var SEARCH_USAGE_LINE = "Usage: search.mjs <source-id> <terms> [project-dir]";
 var RUN_FAIL_EXIT = 1;
@@ -6551,6 +6550,7 @@ function isStripped(key) {
   if (STRIPPED_KEYS.includes(name)) return true;
   return name.startsWith(NODE_PREFIX) && name.endsWith(OPTIONS_SUFFIX);
 }
+var UTF8_DEFAULTS = Object.freeze({ PYTHONUTF8: "1" });
 function buildChildEnv(parent, extra) {
   const env = {};
   for (const key of Object.keys(parent)) {
@@ -6558,6 +6558,8 @@ function buildChildEnv(parent, extra) {
     if (value === void 0 || isStripped(key)) continue;
     env[key] = value;
   }
+  const names = new Set(Object.keys(env).map((key) => key.toUpperCase()));
+  for (const key of Object.keys(UTF8_DEFAULTS)) if (!names.has(key)) env[key] = UTF8_DEFAULTS[key];
   if (extra !== void 0) {
     for (const key of Object.keys(extra)) env[key] = extra[key];
   }
@@ -7219,7 +7221,7 @@ async function runWrapperMain(argv, env) {
     const project = projectOf(argv, cwd);
     const r = await runProcess([runtime, "-c", command], {
       cwd,
-      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV, ...UTF8_OUTPUT_ENV }),
+      env: buildChildEnv(env, { ...PLAIN_OUTPUT_ENV }),
       signal: new AbortController().signal,
       timeoutMs: EXEC_TIMEOUT_MS
     });

@@ -5,7 +5,7 @@
 // D-M2-T11-1, D-M2-R4-1 (ingest byte budget, #961).
 import { z } from "zod/v4";
 import {
-  CANCELLED_LINE, ECHO_MAX_BYTES, EXEC_TIMEOUT_MS, INDEX_WRITE_CHUNK, OUTPUT_CAP, RETENTION_SIZE_CAP_BYTES, SEARCH_PAGE_SIZE, UTF8_OUTPUT_ENV,
+  CANCELLED_LINE, ECHO_MAX_BYTES, EXEC_TIMEOUT_MS, INDEX_WRITE_CHUNK, OUTPUT_CAP, RETENTION_SIZE_CAP_BYTES, SEARCH_PAGE_SIZE,
 } from "../contracts/constants.ts";
 import { CtxError, formatError } from "../contracts/errors.ts";
 import type { BatchInput, Chunk, DbHandle, ToolContext, ToolReply } from "../contracts/types.ts";
@@ -89,7 +89,7 @@ async function runCommand(cmd: string, shell: string | null, ctx: ToolContext, d
   if (left <= 0) return stoppedAt(cmd, formatError("TIMEOUT", { ms: boundMs }));
   const r = await runProcess([shell, SHELL_INLINE_FLAG, cmd], {
     cwd: ctx.project.worktree,
-    env: buildChildEnv(process.env, { ...UTF8_OUTPUT_ENV }),
+    env: buildChildEnv(process.env),
     signal: ctx.signal,
     timeoutMs: left,
   });

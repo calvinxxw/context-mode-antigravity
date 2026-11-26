@@ -138,7 +138,7 @@ Antigravity 支持在 `mcp_config.json` 的 server 配置下声明 `"tools": { "
 2. **会话 ID（`conversationId`）桥接**：当 MCP 请求未通过 `_meta` / 环境变量提供 `sessionId` 且交接文件的 `cwd` 与当前解析工作区一致时，MCP Server 复用 Hook 记录的 `conversationId`，使 `ctx_resume`、`ctx_stats` 与 `ctx_search(scope:"session")` 与 Hook 日志无缝打通。
 3. **插件工具名前缀动态适配（`src/core/hooks/dispatch.ts` + `fallback.ts`）**：Antigravity 启动插件 Hook 时注入 `PLUGIN_ROOT` 环境变量。检测到 `PLUGIN_ROOT` 非空时自动采用 `mcp_context-mode_context-mode_` 前缀，全局安装（无 `PLUGIN_ROOT`）保持 `mcp_context-mode_`。
 4. **`PreInvocation` 重复提示去重（`src/core/hooks/dispatch.ts` + `src/core/compaction/candidates.ts`）**：Antigravity 的 `PreInvocation` 在单轮多步工具调用的每次模型调用前都会触发且 `lastUserInput` 不变。Hook 写入阶段跳过空白及与同会话最新一条 `prompt` 相同的重复文本，同时在 `buildCandidates()` 渲染层折叠连续重复的 `prompt` 行，避免挤占 `ctx_resume` 2048 B 预算。
-5. **Windows GBK / UTF-8 沙箱防乱码（`src/core/sandbox/decode.ts` + `execute.ts` / `batch.ts` / `run-wrapper.ts`）**：沙箱环境变量统一注入 `PYTHONUTF8=1` 与 `PYTHONIOENCODING=utf-8`，PowerShell 预置无 BOM UTF-8 输入/输出/管道编码，并在 Windows 侧对 `stdout`/`stderr` 采用严格 UTF-8 优先、GB18030/GBK 整块与逐行回退解码（Linux/macOS 保持零开销直通 UTF-8）。
+5. **Windows GBK / UTF-8 沙箱防乱码（`src/core/sandbox/decode.ts` + `env.ts` / `execute.ts` / `batch.ts` / `run-wrapper.ts`）**：配合上游 `#1417` 在 `buildChildEnv` 默认注入 `PYTHONUTF8=1`（同时尊重用户自定义 `PYTHONUTF8` 与 `PYTHONIOENCODING`），PowerShell 预置无 BOM UTF-8 输入/输出/管道编码，并在 Windows 侧对 `stdout`/`stderr` 采用严格 UTF-8 优先、GB18030/GBK 整块与逐行回退解码（Linux/macOS 保持零开销直通 UTF-8）。
 
 ---
 
