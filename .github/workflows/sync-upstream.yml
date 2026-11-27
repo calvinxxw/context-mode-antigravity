@@ -6,8 +6,8 @@ name: Sync Upstream
 
 on:
   schedule:
-    # Every 4 hours (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC)
-    - cron: "0 */4 * * *"
+    # Daily at 02:00 UTC (10:00 Beijing Time)
+    - cron: "0 2 * * *"
   workflow_dispatch:
     inputs:
       mode:
