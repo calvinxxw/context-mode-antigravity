@@ -14,7 +14,7 @@ The agents with no install command of their own use the npm route: `npm i -g con
 
 | Agent | Install | Update |
 |---|---|---|
-| Antigravity | `agy plugin install https://github.com/calvinxxw/context-mode` | `agy plugin uninstall context-mode`, then reinstall |
+| Antigravity | `agy plugin install https://github.com/calvinxxw/context-mode-antigravity` | `agy plugin uninstall context-mode`, then reinstall |
 | Claude Code | `claude plugin marketplace add mksglu/context-mode`, then `claude plugin install context-mode@context-mode` | `claude plugin update context-mode@context-mode` |
 | Codex | `codex plugin marketplace add mksglu/context-mode`, then `codex plugin add context-mode@context-mode` | `codex plugin marketplace upgrade context-mode` |
 | Gemini CLI | `gemini extensions install https://github.com/mksglu/context-mode` | `gemini extensions update context-mode` |

@@ -3,7 +3,7 @@
 ## Install
 
 ```sh
-agy plugin install https://github.com/calvinxxw/context-mode
+agy plugin install https://github.com/calvinxxw/context-mode-antigravity
 ```
 
 Update:
@@ -12,7 +12,7 @@ Update:
 context-mode upgrade
 ```
 
-(For a native plugin install without npm, run `agy plugin uninstall context-mode` followed by `agy plugin install https://github.com/calvinxxw/context-mode`.)
+(For a native plugin install without npm, run `agy plugin uninstall context-mode` followed by `agy plugin install https://github.com/calvinxxw/context-mode-antigravity`.)
 
 Check: `context-mode doctor`
 

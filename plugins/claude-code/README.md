@@ -1,6 +1,6 @@
 # Context Mode — Native Google Antigravity Plugin
 
-**Native Google Antigravity plugin fork of [`mksglu/context-mode`](https://github.com/mksglu/context-mode) — a free, local plugin for 12 coding agents. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
+**Native Google Antigravity plugin adaptation of [`mksglu/context-mode`](https://github.com/mksglu/context-mode) (Copyright 2026 Mert Koseoglu, licensed under [ELv2](https://github.com/mksglu/context-mode/blob/v2.2.4/LICENSE)) — a free, local plugin for 12 coding agents. Modified to add native Google Antigravity support while syncing automatically with upstream. It keeps tool output out of your agent's context window and keeps all usage data on your machine. The plugin is free forever.**
 
 [![npm downloads](https://img.shields.io/npm/dt/context-mode?label=npm%20downloads)](https://www.npmjs.com/package/context-mode) [![GitHub stars](https://img.shields.io/github/stars/mksglu/context-mode?style=flat&color=yellow)](https://github.com/mksglu/context-mode) [![Discord](https://img.shields.io/discord/1478479412700909750?label=Discord&logo=discord&color=5865f2)](https://discord.gg/DCN9jUgN5v) [![License: ELv2](https://img.shields.io/badge/License-ELv2-blue.svg)](https://github.com/mksglu/context-mode/blob/v2.2.4/LICENSE)
 
@@ -11,7 +11,7 @@
 **Google Antigravity Native Adaptation (App · CLI `agy` · IDE)** — First-class native plugin adaptation synced automatically with upstream `mksglu/context-mode` via GitHub Actions.
 
 ```sh
-agy plugin install https://github.com/calvinxxw/context-mode
+agy plugin install https://github.com/calvinxxw/context-mode-antigravity
 ```
 
 - **Native plugin & hooks:** `.antigravity-plugin/plugin.json`, `mcp_config.json`, `hooks.json` (`SessionStart`, `PreInvocation`, `PreToolUse`, `PostToolUse`), PascalCase tool normalization, and `/ctx-doctor`, `/ctx-stats`, `/ctx-upgrade` skills.
@@ -279,7 +279,7 @@ Hooks ✓ (hook file) · MCP ✓ · Skills ✓
 <details id="install-antigravity"><summary><b>Antigravity</b></summary>
 
 ```sh
-agy plugin install https://github.com/calvinxxw/context-mode
+agy plugin install https://github.com/calvinxxw/context-mode-antigravity
 ```
 
 ```sh
@@ -718,6 +718,8 @@ The license keeps three uses for the licensor:
 3. Changing, removing or hiding the licensor's license, copyright or other notices.
 
 We chose ELv2 so the source stays open to all and the hosted service stays with the project.
+
+**Upstream attribution & modification notice (ELv2):** This standalone repository (`calvinxxw/context-mode-antigravity`) is a modified derivative work based on [`mksglu/context-mode`](https://github.com/mksglu/context-mode) (Copyright 2026 Mert Koseoglu) under the Elastic License 2.0 (`LICENSE`). Modifications add native Google Antigravity adapter/plugin/hook manifests, Windows sandbox encoding fixes, and automated daily upstream sync; all original upstream copyright and license notices are preserved intact.
 
 ## Community
 

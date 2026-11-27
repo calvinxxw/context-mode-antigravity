@@ -872,7 +872,7 @@ export const UPGRADE_HOST_COMMAND: Readonly<Record<AgentId, string>> = Object.fr
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
   zcode: "npm i -g context-mode && context-mode setup --agents zcode",
-  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode",
+  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode-antigravity",
 });
 // Old install forms, kept so uninstall and doctor still find and remove them (ADR-0011 Pi and OpenCode rows).
 export const PI_GIT_PACKAGE = "git:github.com/mksglu/context-mode@release"; // old Pi git entry (uninstall removes it)
@@ -1164,7 +1164,7 @@ export const NATIVE_INSTALL: Readonly<Record<string, readonly string[]>> = Objec
   vscode: ["npm i -g context-mode", "context-mode setup --agents vscode"],
   kiro: ["npm i -g context-mode", "context-mode setup --agents kiro"],
   zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"],
-  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode"],
+  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode-antigravity"],
 });
 export const ISSUE_FORM_URL = `https://github.com/${ISSUE_REPO_SLUG}/issues/new?template=${ISSUE_FORM_FILE}`; // + &title=&summary=
 export const DOCTOR_GIT_VERSION_TIMEOUT_MS = 5000; // git --version for the report file only

@@ -28860,7 +28860,7 @@ var UPGRADE_HOST_COMMAND = Object.freeze({
   vscode: "npm i -g context-mode && context-mode setup --agents vscode",
   kiro: "npm i -g context-mode && context-mode setup --agents kiro",
   zcode: "npm i -g context-mode && context-mode setup --agents zcode",
-  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode"
+  antigravity: "agy plugin uninstall context-mode && agy plugin install https://github.com/calvinxxw/context-mode-antigravity"
 });
 var PI_GIT_PACKAGE = "git:github.com/mksglu/context-mode@release";
 var OPENCODE_GIT_SPEC = "git+https://github.com/mksglu/context-mode.git#release";
@@ -29143,7 +29143,7 @@ var NATIVE_INSTALL = Object.freeze({
   vscode: ["npm i -g context-mode", "context-mode setup --agents vscode"],
   kiro: ["npm i -g context-mode", "context-mode setup --agents kiro"],
   zcode: ["zcode plugins marketplace add mksglu/context-mode", "zcode plugins install context-mode@context-mode"],
-  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode"]
+  antigravity: ["agy plugin install https://github.com/calvinxxw/context-mode-antigravity"]
 });
 var ISSUE_FORM_URL = `https://github.com/${ISSUE_REPO_SLUG}/issues/new?template=${ISSUE_FORM_FILE}`;
 var DOCTOR_GIT_VERSION_TIMEOUT_MS = 5e3;

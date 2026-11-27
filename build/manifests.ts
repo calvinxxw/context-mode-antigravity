@@ -252,7 +252,7 @@ function zcodePlugin(row: AdapterRow, version: string): [string, JsonObject][] {
 const ANTIGRAVITY_PLUGIN_DIR = ".antigravity-plugin";
 const ANTIGRAVITY_PLUGIN_SCHEMA = "https://antigravity.google/schemas/v1/plugin.json";
 const ANTIGRAVITY_PLUGIN_ROOT = "${PLUGIN_ROOT}";
-const ANTIGRAVITY_REPO_URL = "https://github.com/calvinxxw/context-mode";
+const ANTIGRAVITY_REPO_URL = "https://github.com/calvinxxw/context-mode-antigravity";
 function antigravityPlugin(row: AdapterRow, version: string): [string, JsonObject][] {
   const meta = devMeta();
   const pluginRow: AdapterRow = { ...row, toolNamePrefix: ANTIGRAVITY_PLUGIN_TOOL_PREFIX };

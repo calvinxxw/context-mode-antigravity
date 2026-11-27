@@ -1,6 +1,6 @@
 # Antigravity 原生适配开发说明
 
-> 本文档说明在 `calvinxxw/context-mode`（基于上游 `mksglu/context-mode` v2.2.2）上为 **Google Antigravity**（App / CLI `agy` / IDE 共享同一配置体系）完成原生适配的架构设计、协议映射、核心改动与验证方法。
+> 本文档说明在 `calvinxxw/context-mode-antigravity`（基于上游 `mksglu/context-mode`，按 ELv2 协议保留上游版权并自动同步）上为 **Google Antigravity**（App / CLI `agy` / IDE 共享同一配置体系）完成原生适配的架构设计、协议映射、核心改动与验证方法。
 
 ---
 
@@ -14,7 +14,7 @@
 4. **MCP 工具懒加载开销**：Antigravity 默认以懒加载模式暴露 MCP 工具（需先读取 schema 再经 `call_mcp_tool` 调用），热路径工具无法直接调用。
 
 本次适配的目标是把 `antigravity` 作为 **第 12 个一等原生 Agent** 完整接入 `context-mode`，同时支持：
-- **原生插件安装**：`agy plugin install https://github.com/calvinxxw/context-mode`（同时覆盖 Antigravity App、CLI、IDE）。
+- **原生插件安装**：`agy plugin install https://github.com/calvinxxw/context-mode-antigravity`（同时覆盖 Antigravity App、CLI、IDE）。
 - **全局 CLI 配置安装**：`context-mode setup --agents antigravity` 与 `context-mode doctor --agents antigravity`。
 
 ---
@@ -177,7 +177,7 @@ node e2e/cases/run.mjs --milestone M7
 
 - **原生插件安装（推荐，App / CLI / IDE 通用）**：
   ```sh
-  agy plugin install https://github.com/calvinxxw/context-mode
+  agy plugin install https://github.com/calvinxxw/context-mode-antigravity
   ```
 - **全局 CLI 配置安装（回退或修复）**：
   ```sh

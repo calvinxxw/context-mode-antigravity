@@ -1,4 +1,4 @@
-# Fork sync workflow for calvinxxw/context-mode -> upstream mksglu/context-mode.
+# Upstream sync workflow for calvinxxw/context-mode-antigravity -> upstream mksglu/context-mode.
 # Pulls upstream main, resolves conflicts on auto-generated plugin bundles, rebuilds
 # Antigravity + multi-agent bundles via build/build.mjs & build/main-tree.mjs, runs
 # verification checks, and pushes directly to main (or opens a PR).

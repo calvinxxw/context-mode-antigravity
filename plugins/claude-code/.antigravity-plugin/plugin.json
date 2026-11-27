@@ -28,7 +28,7 @@
   ],
   "license": "Elastic-2.0",
   "name": "context-mode",
-  "repository": "https://github.com/calvinxxw/context-mode",
+  "repository": "https://github.com/calvinxxw/context-mode-antigravity",
   "suggestedPrompts": [
     "Run ctx_doctor to verify Context Mode is healthy in this workspace",
     "Show ctx_stats for how much context was saved this session",
