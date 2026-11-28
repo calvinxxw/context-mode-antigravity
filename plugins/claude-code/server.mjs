@@ -3487,7 +3487,7 @@ var recursive = /* @__PURE__ */ new WeakMap();
 var NONE = 0;
 var ASSUMED = 1;
 var PROVEN = 2;
-function isRecursive(inst, stack2, resolve10) {
+function isRecursive(inst, stack2, resolve11) {
   const cached4 = recursive.get(inst);
   if (cached4 !== void 0)
     return cached4 ? PROVEN : NONE;
@@ -3497,7 +3497,7 @@ function isRecursive(inst, stack2, resolve10) {
   let result = NONE;
   const check2 = (child) => {
     if (result !== PROVEN && child?._zod) {
-      const answer3 = isRecursive(child, stack2, resolve10);
+      const answer3 = isRecursive(child, stack2, resolve11);
       if (answer3 > result)
         result = answer3;
     }
@@ -3508,7 +3508,7 @@ function isRecursive(inst, stack2, resolve10) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack2, resolve10) : NONE;
+      const child = desc.get ? ASSUMED : desc.value?._zod ? isRecursive(desc.value, stack2, resolve11) : NONE;
       if (child > answer3)
         answer3 = child;
     }
@@ -3572,7 +3572,7 @@ function isRecursive(inst, stack2, resolve10) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve10 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve11 ? inst._zod.innerType : void 0);
       merge5(inner ? isRecursive(inner, stack2, false) : ASSUMED);
       break;
     }
@@ -11016,7 +11016,7 @@ var recursive2 = /* @__PURE__ */ new WeakMap();
 var NONE2 = 0;
 var ASSUMED2 = 1;
 var PROVEN2 = 2;
-function isRecursive2(inst, stack2, resolve10) {
+function isRecursive2(inst, stack2, resolve11) {
   const cached4 = recursive2.get(inst);
   if (cached4 !== void 0)
     return cached4 ? PROVEN2 : NONE2;
@@ -11026,7 +11026,7 @@ function isRecursive2(inst, stack2, resolve10) {
   let result = NONE2;
   const check2 = (child) => {
     if (result !== PROVEN2 && child?._zod) {
-      const answer3 = isRecursive2(child, stack2, resolve10);
+      const answer3 = isRecursive2(child, stack2, resolve11);
       if (answer3 > result)
         result = answer3;
     }
@@ -11037,7 +11037,7 @@ function isRecursive2(inst, stack2, resolve10) {
       const desc = Object.getOwnPropertyDescriptor(sh, key);
       if (spread && !desc.enumerable)
         continue;
-      const child = desc.get ? ASSUMED2 : desc.value?._zod ? isRecursive2(desc.value, stack2, resolve10) : NONE2;
+      const child = desc.get ? ASSUMED2 : desc.value?._zod ? isRecursive2(desc.value, stack2, resolve11) : NONE2;
       if (child > answer3)
         answer3 = child;
     }
@@ -11101,7 +11101,7 @@ function isRecursive2(inst, stack2, resolve10) {
       break;
     // `$ZodLazy` caches its inner on the def, so a resolved edge is followed exactly
     case "lazy": {
-      const inner = def._cachedInner ?? (resolve10 ? inst._zod.innerType : void 0);
+      const inner = def._cachedInner ?? (resolve11 ? inst._zod.innerType : void 0);
       merge5(inner ? isRecursive2(inner, stack2, false) : ASSUMED2);
       break;
     }
@@ -17728,14 +17728,14 @@ function inputRequiredRoundsExceededMessage(method, maxRounds) {
   return `Multi-round-trip request '${method}' still required input after ${maxRounds} rounds (inputRequired.maxRounds)`;
 }
 function sleep(ms, signal) {
-  return new Promise((resolve10, reject) => {
+  return new Promise((resolve11, reject) => {
     if (signal?.aborted) {
       reject(signal.reason instanceof SdkError ? signal.reason : new SdkError(SdkErrorCode.RequestTimeout, String(signal.reason)));
       return;
     }
     const timer = setTimeout(() => {
       signal?.removeEventListener("abort", onAbort);
-      resolve10();
+      resolve11();
     }, ms);
     const onAbort = () => {
       clearTimeout(timer);
@@ -18534,7 +18534,7 @@ var Protocol = class {
     const flowStartedAt = Date.now();
     let onAbort;
     let cleanupMessageId;
-    return new Promise((resolve10, reject) => {
+    return new Promise((resolve11, reject) => {
       const earlyReject = (error42) => {
         reject(error42);
       };
@@ -18603,7 +18603,7 @@ var Protocol = class {
         }
         if (decoded.kind === "invalid") return reject(decoded.error);
         if (decoded.kind === "input_required") {
-          if (options?.allowInputRequired === true) return resolve10(manualInputRequiredValue(decoded));
+          if (options?.allowInputRequired === true) return resolve11(manualInputRequiredValue(decoded));
           const flow = {
             codec,
             request: request2,
@@ -18615,11 +18615,11 @@ var Protocol = class {
               params
             }, resultSchema, legOptions)
           };
-          return resolve10(this._resolveNonCompleteResult(decoded, flow));
+          return resolve11(this._resolveNonCompleteResult(decoded, flow));
         }
         const result = decoded.result;
         validateStandardSchema(resultSchema, result).then((parseResult) => {
-          if (parseResult.success) resolve10(parseResult.data);
+          if (parseResult.success) resolve11(parseResult.data);
           else reject(new SdkError(SdkErrorCode.InvalidResult, `Invalid result for ${request2.method}: ${parseResult.error}`));
         }, reject);
       });
@@ -21535,7 +21535,7 @@ var require_compile = /* @__PURE__ */ __commonJSMin((exports) => {
     ref = (0, resolve_1.resolveUrl)(this.opts.uriResolver, baseId, ref);
     const schOrFunc = root.refs[ref];
     if (schOrFunc) return schOrFunc;
-    let _sch = resolve10.call(this, root, ref);
+    let _sch = resolve11.call(this, root, ref);
     if (_sch === void 0) {
       const schema = (_a5 = root.localRefs) === null || _a5 === void 0 ? void 0 : _a5[ref];
       const { schemaId } = this.opts;
@@ -21561,7 +21561,7 @@ var require_compile = /* @__PURE__ */ __commonJSMin((exports) => {
   function sameSchemaEnv(s1, s2) {
     return s1.schema === s2.schema && s1.root === s2.root && s1.baseId === s2.baseId;
   }
-  function resolve10(root, ref) {
+  function resolve11(root, ref) {
     let sch;
     while (typeof (sch = this.refs[ref]) == "string") ref = sch;
     return sch || this.schemas[ref] || resolveSchema.call(this, root, ref);
@@ -22011,7 +22011,7 @@ var require_fast_uri = /* @__PURE__ */ __commonJSMin((exports, module) => {
     else if (typeof uri === "object") uri = parse6(serialize(uri, options), options);
     return uri;
   }
-  function resolve10(baseURI, relativeURI, options) {
+  function resolve11(baseURI, relativeURI, options) {
     const schemelessOptions = options ? Object.assign({ scheme: "null" }, options) : { scheme: "null" };
     const resolved = resolveComponent(parse6(baseURI, schemelessOptions), parse6(relativeURI, schemelessOptions), schemelessOptions, true);
     schemelessOptions.skipEscape = true;
@@ -22185,7 +22185,7 @@ var require_fast_uri = /* @__PURE__ */ __commonJSMin((exports, module) => {
   const fastUri = {
     SCHEMES,
     normalize: normalize2,
-    resolve: resolve10,
+    resolve: resolve11,
     resolveComponent,
     equal,
     serialize,
@@ -27650,7 +27650,7 @@ var StdioServerTransport = class {
   }
   send(message2) {
     if (this._closed) return Promise.reject(/* @__PURE__ */ new Error("StdioServerTransport is closed"));
-    return new Promise((resolve10, reject) => {
+    return new Promise((resolve11, reject) => {
       const json2 = serializeMessage(message2);
       let settled = false;
       const onError = (error42) => {
@@ -27665,14 +27665,14 @@ var StdioServerTransport = class {
         settled = true;
         this._stdout.off("error", onError);
         this._stdout.off("drain", onDrain);
-        resolve10();
+        resolve11();
       };
       this._stdout.once("error", onError);
       if (this._stdout.write(json2)) {
         if (settled) return;
         settled = true;
         this._stdout.off("error", onError);
-        resolve10();
+        resolve11();
       } else if (!settled) this._stdout.once("drain", onDrain);
     });
   }
@@ -27726,14 +27726,14 @@ var StdioConnectionChannel = class {
   */
   async whenRequestsAnswered(timeoutMs) {
     if (this._closed || this._pendingRequests.size === 0) return true;
-    return await new Promise((resolve10) => {
+    return await new Promise((resolve11) => {
       const waiter = () => {
         clearTimeout(timer);
-        resolve10(true);
+        resolve11(true);
       };
       const timer = setTimeout(() => {
         this._drainWaiters = this._drainWaiters.filter((pending) => pending !== waiter);
-        resolve10(false);
+        resolve11(false);
       }, timeoutMs);
       this._drainWaiters.push(waiter);
     });
@@ -28238,6 +28238,7 @@ var DECAY_X1000 = Object.freeze([
 var RRF_K = 60;
 var SOURCE_HANDLE_MAX_DIGITS = 10;
 var EXEC_TIMEOUT_MS = 6e5;
+var ANTIGRAVITY_EXEC_TIMEOUT_MS = 15e4;
 var KILL_GRACE_MS = 1e3;
 var PIPE_EOF_GRACE_MS = 250;
 var PIPE_DRAIN_MAX_MS = 2e3;
@@ -28351,6 +28352,7 @@ var BOUNDED_UNLESS_VERBOSE = Object.freeze(["cp", "mv", "rm"]);
 var VERBOSE_FLAGS = Object.freeze(["-v", "--verbose"]);
 var JQ_WHITELIST = Object.freeze({ identity: ".", length: "length", pipeLength: "| length", fieldSep: "." });
 var NEVER_DENY_HOSTS = Object.freeze(["claude.ai", "claude.site", "claudeusercontent.com"]);
+var LOOPBACK_HOSTS = Object.freeze(["localhost", "127.0.0.1", "[::1]", "::1"]);
 var CURL_COMMANDS = Object.freeze(["curl", "wget"]);
 var CURL_SILENT_FLAGS = Object.freeze({ curl: { short: "s", long: "--silent" }, wget: { short: "q", long: "--quiet" } });
 var CURL_VERBOSE_FLAGS = Object.freeze(["-v", "--verbose", "--trace", "--trace-ascii"]);
@@ -28474,7 +28476,7 @@ function PURGE_SUMMARY(rows, scope) {
 var DECISION_SOURCE = "decision";
 var DECISION_USER_LABEL = "decision (user)";
 var RELEASE_REPO_URL = "https://github.com/mksglu/context-mode.git";
-var BUNDLE_SHA = true ? "80bbddd7875883bc1c50bbd2fe306387122e4cee" : void 0;
+var BUNDLE_SHA = true ? "999e9edc708e7bfcc1df34e8d10bd2051c952729" : void 0;
 var DOCTOR_CHECK_ORDER = Object.freeze(["D1", "D2", "D3", "D4", "D5", "D5b", "D6", "D7", "D8", "D9", "D10", "D11"]);
 var DOCTOR_LABEL = Object.freeze({
   D1: "version",
@@ -44596,10 +44598,10 @@ function startArgv(argv) {
   return sh === null ? null : [sh, ...argv];
 }
 function runProcess(argv, o) {
-  return new Promise((resolve10) => {
+  return new Promise((resolve11) => {
     const isWin2 = process.platform === "win32";
     const start = startArgv(argv);
-    if (start === null) return resolve10(NOT_STARTED);
+    if (start === null) return resolve11(NOT_STARTED);
     let child;
     try {
       child = spawn2(start[0], start.slice(1), {
@@ -44613,7 +44615,7 @@ function runProcess(argv, o) {
         windowsHide: true
       });
     } catch {
-      return resolve10(NOT_STARTED);
+      return resolve11(NOT_STARTED);
     }
     const stdoutChunks = [];
     const stderrChunks = [];
@@ -44647,7 +44649,7 @@ function runProcess(argv, o) {
       clearTimeout(drainTimer);
       clearTimeout(stopTimer);
       o.signal.removeEventListener("abort", onAbort);
-      resolve10({
+      resolve11({
         stdout: Buffer.concat(stdoutChunks),
         stderr: Buffer.concat(stderrChunks),
         exitCode,
@@ -46327,6 +46329,7 @@ function encode12(ev, d, _extra) {
 }
 
 // src/adapters/antigravity.ts
+import { isAbsolute as isAbsolute4, resolve as resolve4 } from "node:path";
 var TOOL_NAME_PREFIX11 = "mcp_context-mode_";
 var PLUGIN_TOOL_NAME_PREFIX2 = "mcp_context-mode_context-mode_";
 var UNDERSCORE_TOOL_PREFIX = "mcp_context_mode_";
@@ -46340,6 +46343,9 @@ var EDIT_TOOL_NAMES = Object.freeze([
   "multi_replace_file_content",
   "write_file",
   "edit_file"
+]);
+var POST_EDIT_TOOL_NAMES = Object.freeze([
+  "mcp_agy-fast_fast_apply_edits"
 ]);
 var EVENT_MAP = Object.freeze({
   SessionStart: "SessionStart",
@@ -46367,6 +46373,7 @@ var NATIVE_TO_CANONICAL8 = {
   replace_file_content: "Edit",
   multi_replace_file_content: "Edit",
   edit_file: "Edit",
+  "mcp_agy-fast_fast_apply_edits": "Edit",
   ask_question: "AskUserQuestion"
 };
 var CALL_MCP_TOOL = "call_mcp_tool";
@@ -46391,6 +46398,7 @@ function canonicalName6(name, args) {
     const tool = str(own4(args, "ToolName"));
     if (server !== void 0 && tool !== void 0) {
       if (OWN_SERVER_NAMES.includes(server) && tool.startsWith(OWN_TOOL_PREFIX2)) return tool;
+      if (server === "agy-fast_fast" && tool === "apply_edits") return "Edit";
       return "mcp:" + server + ":" + tool;
     }
     return name;
@@ -46405,36 +46413,59 @@ function canonicalName6(name, args) {
   if (sep3 <= 0 || sep3 === rest.length - 1) return name;
   return "mcp:" + rest.slice(0, sep3) + ":" + rest.slice(sep3 + MCP_SEP4.length);
 }
-function normalizeInput(name, canonical, args) {
-  if (name === CALL_MCP_TOOL) {
-    const inner = own4(args, "Arguments");
-    if (isRecord3(inner)) return { ...args, ...inner };
-    return args;
+function extractBatchEditPaths(args) {
+  let editsRaw = own4(args, "edits");
+  if (typeof editsRaw === "string") {
+    try {
+      editsRaw = JSON.parse(editsRaw);
+    } catch {
+      return [];
+    }
   }
-  const out = { ...args };
+  if (!Array.isArray(editsRaw)) return [];
+  const baseCwd = str(own4(args, "cwd"));
+  const paths = [];
+  for (const item of editsRaw) {
+    if (!isRecord3(item)) continue;
+    const rawPath = str(own4(item, "path"));
+    if (rawPath === void 0) continue;
+    const resolved = baseCwd !== void 0 && !isAbsolute4(rawPath) ? resolve4(baseCwd, rawPath) : rawPath;
+    if (!paths.includes(resolved)) paths.push(resolved);
+  }
+  return paths;
+}
+function normalizeInput(name, canonical, args) {
+  const effectiveArgs = name === CALL_MCP_TOOL && isRecord3(own4(args, "Arguments")) ? { ...args, ...own4(args, "Arguments") } : args;
+  if (name === CALL_MCP_TOOL && canonical !== "Edit") return effectiveArgs;
+  const out = { ...effectiveArgs };
   if (canonical === "Bash") {
-    const cmd = str(own4(args, "CommandLine")) ?? str(own4(args, "command"));
+    const cmd = str(own4(effectiveArgs, "CommandLine")) ?? str(own4(effectiveArgs, "command"));
     if (cmd !== void 0 && own4(out, "command") === void 0) out.command = cmd;
-    const desc = str(own4(args, "toolSummary")) ?? str(own4(args, "description"));
+    const desc = str(own4(effectiveArgs, "toolSummary")) ?? str(own4(effectiveArgs, "description"));
     if (desc !== void 0 && own4(out, "description") === void 0) out.description = desc;
   } else if (canonical === "Read") {
-    const fp = str(own4(args, "AbsolutePath")) ?? str(own4(args, "Path")) ?? str(own4(args, "file_path"));
+    const fp = str(own4(effectiveArgs, "AbsolutePath")) ?? str(own4(effectiveArgs, "Path")) ?? str(own4(effectiveArgs, "file_path"));
     if (fp !== void 0 && own4(out, "file_path") === void 0) out.file_path = fp;
-    const start = own4(args, "StartLine");
+    const start = own4(effectiveArgs, "StartLine");
     if (start !== void 0 && start !== null && own4(out, "offset") === void 0) out.offset = start;
-    const end = own4(args, "EndLine");
+    const end = own4(effectiveArgs, "EndLine");
     if (end !== void 0 && end !== null && own4(out, "limit") === void 0) out.limit = end;
   } else if (canonical === "Grep") {
-    const pat = str(own4(args, "Query")) ?? str(own4(args, "Pattern"));
+    const pat = str(own4(effectiveArgs, "Query")) ?? str(own4(effectiveArgs, "Pattern"));
     if (pat !== void 0 && own4(out, "pattern") === void 0) out.pattern = pat;
-    const sp = str(own4(args, "SearchPath"));
+    const sp = str(own4(effectiveArgs, "SearchPath"));
     if (sp !== void 0 && own4(out, "path") === void 0) out.path = sp;
   } else if (canonical === "WebFetch") {
-    const url4 = str(own4(args, "Url")) ?? str(own4(args, "url"));
+    const url4 = str(own4(effectiveArgs, "Url")) ?? str(own4(effectiveArgs, "url"));
     if (url4 !== void 0 && own4(out, "url") === void 0) out.url = url4;
   } else if (canonical === "Write" || canonical === "Edit") {
-    const fp = str(own4(args, "TargetFile")) ?? str(own4(args, "Path")) ?? str(own4(args, "file_path"));
+    const fp = str(own4(effectiveArgs, "TargetFile")) ?? str(own4(effectiveArgs, "Path")) ?? str(own4(effectiveArgs, "file_path"));
     if (fp !== void 0 && own4(out, "file_path") === void 0) out.file_path = fp;
+    const batchPaths = extractBatchEditPaths(effectiveArgs);
+    if (batchPaths.length > 0) {
+      out.file_paths = batchPaths;
+      if (own4(out, "file_path") === void 0) out.file_path = batchPaths[0];
+    }
   }
   return out;
 }
@@ -46801,7 +46832,7 @@ function ownBundleDir() {
 
 // src/core/ops/doctor-config.ts
 import { existsSync as existsSync12, readdirSync as readdirSync7, readFileSync as readFileSync11 } from "node:fs";
-import { dirname as dirname7, isAbsolute as isAbsolute6, join as join14, resolve as resolve4 } from "node:path";
+import { dirname as dirname7, isAbsolute as isAbsolute7, join as join14, resolve as resolve5 } from "node:path";
 
 // src/core/ops/host-text.ts
 var BOM_CODE = 65279;
@@ -49723,7 +49754,7 @@ function detectV1(agent, home, scope = {}) {
 
 // src/core/ops/plugin-root.ts
 import { existsSync as existsSync8, readdirSync as readdirSync6, readFileSync as readFileSync7, realpathSync as realpathSync4 } from "node:fs";
-import { dirname as dirname6, isAbsolute as isAbsolute4, join as join11, sep as sep2 } from "node:path";
+import { dirname as dirname6, isAbsolute as isAbsolute5, join as join11, sep as sep2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 function missing(agent, path8) {
   return new CtxError("PLUGIN_ROOT_MISSING", { agent, path: path8 });
@@ -49835,7 +49866,7 @@ function configEntryRoot(adapter, env) {
   const value = parseHostConfig(adapter.id, file2, current.text, current.format);
   const args = hostConfigValueAt(value, [...spec.key, MCP_ARGS_FIELD]);
   const script = Array.isArray(args) ? args[0] : void 0;
-  if (typeof script !== "string" || !isAbsolute4(script)) throw missing(adapter.id, file2);
+  if (typeof script !== "string" || !isAbsolute5(script)) throw missing(adapter.id, file2);
   return dirname6(script);
 }
 function packageDirOf(dir) {
@@ -49942,7 +49973,7 @@ function piInstalledIn(env, home, pkgDir, cwd) {
 
 // src/core/ops/doctor-env.ts
 import { existsSync as existsSync10, readFileSync as readFileSync9, realpathSync as realpathSync6 } from "node:fs";
-import { isAbsolute as isAbsolute5, join as join12, relative as relative2 } from "node:path";
+import { isAbsolute as isAbsolute6, join as join12, relative as relative2 } from "node:path";
 function pass(id, detail = DOCTOR_PASS_DETAIL) {
   return { id, label: DOCTOR_LABEL[id], status: "PASS", detail };
 }
@@ -50111,7 +50142,7 @@ function checkMcp(ctx, adapter) {
 function piCwdInside(worktree, piCwd) {
   if (piCwd === void 0 || !existsSync10(piCwd)) return false;
   const rel = relative2(worktree, realpathSync6.native(piCwd));
-  return rel === "" || !rel.startsWith("..") && !isAbsolute5(rel);
+  return rel === "" || !rel.startsWith("..") && !isAbsolute6(rel);
 }
 function checkProject(i) {
   const bad = fail("D7", D7_DETAIL(i.project.source), D7_FIX);
@@ -50236,11 +50267,16 @@ function readParsed(agent, file2) {
   return { value: parseHostConfig(agent, cur.path, cur.text, cur.format), text: cur.text, format: cur.format };
 }
 function composeMatcher(row5, event) {
-  let prefix = "";
-  for (const ch of row5.toolNamePrefix) prefix += REGEX_SPECIAL_CHARS.includes(ch) ? REGEX_ESCAPE + ch : ch;
+  const escape3 = (s) => {
+    let out = "";
+    for (const ch of s) out += REGEX_SPECIAL_CHARS.includes(ch) ? REGEX_ESCAPE + ch : ch;
+    return out;
+  };
+  const prefix = escape3(row5.toolNamePrefix);
   const names = Object.values(row5.nativeTools).flat();
   const alts = [...names, prefix + OWN_TOOL_PREFIX + MATCHER_ANY];
   if (event === POST_TOOL_USE && hasReplace(row5)) alts.push(MCP_ANY_MATCH);
+  if (event === POST_TOOL_USE && row5.id === "antigravity") alts.push(...POST_EDIT_TOOL_NAMES.map(escape3));
   return MATCHER_OPEN + alts.join(MATCHER_ALT) + MATCHER_CLOSE;
 }
 var lastSegment = (p) => {
@@ -50476,7 +50512,7 @@ function opencodeDirPlugins(dirs) {
         const loads = lits.some((p) => {
           if (isModule(p)) return packageResolves(dirname7(f));
           const bare2 = p.startsWith(FILE_URL_PREFIX) ? p.slice(FILE_URL_PREFIX.length) : p;
-          return existsSync12(isAbsolute6(bare2) ? bare2 : resolve4(dirname7(f), bare2));
+          return existsSync12(isAbsolute7(bare2) ? bare2 : resolve5(dirname7(f), bare2));
         });
         out.push({ file: f, loads });
       }
@@ -52730,7 +52766,7 @@ function hasType(v, t) {
 function same(a, b) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
-function resolve5(root, ref) {
+function resolve6(root, ref) {
   const parts = ref.split("/");
   if (parts[0] !== "#") throw new Error(`hook-shape: only local $ref is read, got ${ref}`);
   let at = root;
@@ -52743,7 +52779,7 @@ function shapeErrors(schema, value, root = schema, at = "$") {
     if (!NOTE_KEYS.has(k) && !RULE_KEYS.has(k)) throw new Error(`hook-shape: keyword ${k} at ${at} is not read by the checker`);
   }
   const errs = [];
-  if (typeof schema.$ref === "string") errs.push(...shapeErrors(resolve5(root, schema.$ref), value, root, at));
+  if (typeof schema.$ref === "string") errs.push(...shapeErrors(resolve6(root, schema.$ref), value, root, at));
   if (Array.isArray(schema.allOf)) for (const s of schema.allOf) errs.push(...shapeErrors(s, value, root, at));
   if (schema.type !== void 0) {
     const types = Array.isArray(schema.type) ? schema.type : [schema.type];
@@ -52910,14 +52946,14 @@ function pluginHooksFromReply(m, pluginId) {
 function askPluginHooks(env, pluginId, cwd) {
   const bin = whichBin("codex", env);
   if (!bin) return Promise.resolve({ kind: "absent" });
-  return new Promise((resolve10) => {
+  return new Promise((resolve11) => {
     let asked;
     const done_ = (hooks) => hooks === void 0 ? { kind: "silent" } : { kind: "list", hooks, codexHome: asked };
     let f;
     try {
       f = spawnForm(bin, ["app-server"], env);
     } catch {
-      resolve10({ kind: "silent" });
+      resolve11({ kind: "silent" });
       return;
     }
     const child = spawn3(f.command, f.args, { env, cwd, stdio: ["pipe", "pipe", "ignore"], windowsVerbatimArguments: f.windowsVerbatimArguments, windowsHide: true });
@@ -52927,7 +52963,7 @@ function askPluginHooks(env, pluginId, cwd) {
     let result;
     const settle3 = () => {
       clearTimeout(grace);
-      resolve10(done_(result));
+      resolve11(done_(result));
     };
     let grace;
     const finish2 = (v) => {
@@ -53295,14 +53331,14 @@ async function checkHookRoundTrip(i) {
 }
 
 // src/core/hooks/fallback.ts
-import { join as join16, resolve as resolve7 } from "node:path";
+import { join as join16, resolve as resolve8 } from "node:path";
 
 // src/core/policy/read-media.ts
 import { extname } from "node:path";
 var { closeSync, openSync, readSync } = process.getBuiltinModule("node:fs");
 
 // src/core/policy/own-file.ts
-import { extname as extname2, join as join15, resolve as resolve6 } from "node:path";
+import { extname as extname2, join as join15, resolve as resolve7 } from "node:path";
 
 // src/core/hooks/fallback.ts
 var fs2 = process.getBuiltinModule("node:fs");
@@ -53931,7 +53967,7 @@ var ctxDoctor = Object.freeze({
 // src/core/tools/execute.ts
 import { existsSync as existsSync19, mkdtempSync as mkdtempSync2, rmSync as rmSync6, writeFileSync as writeFileSync5 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import { dirname as dirname11, join as join20, parse as parse5, resolve as resolve8 } from "node:path";
+import { dirname as dirname11, join as join20, parse as parse5, resolve as resolve9 } from "node:path";
 
 // src/core/index/select.ts
 var READ_CHUNKS = "SELECT ord, body FROM chunks WHERE source_id = ?";
@@ -54116,7 +54152,7 @@ async function handler3(raw, ctx) {
   const cwd = ctx.project.worktree;
   const extra = { ...PLAIN_OUTPUT_ENV };
   if (input.file !== void 0) {
-    const abs = resolve8(cwd, input.file);
+    const abs = resolve9(cwd, input.file);
     const bad = fileError(input.file, abs, ctx.project.containmentRoot, ctx.hostRoots);
     if (bad !== null) return bad;
     extra.CTX_FILE = abs;
@@ -54129,7 +54165,9 @@ async function handler3(raw, ctx) {
   }
   if (runtime === null) return fail4(noRuntimeError(input.language).toLine());
   const env = buildChildEnv(process.env, extra);
-  const timeoutMs = input.timeoutMs ?? EXEC_TIMEOUT_MS;
+  const effectiveAgent = ctx.agent ?? ctx.project.agent;
+  const maxTimeout = effectiveAgent === "antigravity" ? ANTIGRAVITY_EXEC_TIMEOUT_MS : EXEC_TIMEOUT_MS;
+  const timeoutMs = Math.min(input.timeoutMs ?? maxTimeout, maxTimeout);
   const journal = { kind: "cmd", key: canonicalKey(TOOL2, input.code), path: input.file ?? null, exit_code: null };
   let tmpDir = null;
   let handedOff = false;
@@ -54152,7 +54190,13 @@ async function handler3(raw, ctx) {
       return { text: BACKGROUND_REPLY_PREFIX + pid, isError: false, sandboxBytes: 0, journal };
     }
     const r = await runProcess(argv, { cwd, env, signal: ctx.signal, timeoutMs });
-    if (r.killed === "timeout") return fail4(new CtxError("TIMEOUT", { ms: timeoutMs }).toLine(), journal);
+    if (r.killed === "timeout") {
+      const head = new CtxError("TIMEOUT", { ms: timeoutMs }).toLine();
+      const partial4 = (decodeSandboxOutput(r.stdout) + decodeSandboxOutput(r.stderr)).trim();
+      if (partial4 === "") return fail4(head, journal);
+      const preview = capBytes(partial4, EXEC_PREVIEW_BYTES).text;
+      return fail4(head + "\nPartial output before timeout:\n" + preview, journal);
+    }
     if (r.killed === "cancel") return fail4(CANCELLED_LINE, journal);
     if (r.exitCode === null) return fail4(spawnFailed(argv[0], cwd), journal);
     return await finish(input, ctx, r, r.exitCode, { ...journal, exit_code: r.exitCode });
@@ -54176,7 +54220,7 @@ var ctxExecute = {
 
 // src/core/tools/index.ts
 import { existsSync as existsSync20, readFileSync as readFileSync17, statSync as statSync8 } from "node:fs";
-import { dirname as dirname12, extname as extname3, join as join23, relative as relative3, resolve as resolve9 } from "node:path";
+import { dirname as dirname12, extname as extname3, join as join23, relative as relative3, resolve as resolve10 } from "node:path";
 
 // src/core/index/walk.ts
 import { readdirSync as readdirSync9, readFileSync as readFileSync15, realpathSync as realpathSync10, statSync as statSync7 } from "node:fs";
@@ -54369,12 +54413,12 @@ function inFakeIpPool(address) {
   return isIP(address) === 4 && FAKE_IP_POOL.check(address, "ipv4");
 }
 function fakeIpResolver() {
-  fakeIpProbe ??= new Promise((resolve10) => {
-    const timer = setTimeout(() => resolve10(false), FAKE_IP_PROBE_MS);
+  fakeIpProbe ??= new Promise((resolve11) => {
+    const timer = setTimeout(() => resolve11(false), FAKE_IP_PROBE_MS);
     timer.unref();
     lookup(randomBytes(FAKE_IP_PROBE_BYTES).toString("hex") + FAKE_IP_PROBE_TLD, { all: true }).then(
-      (addrs) => resolve10(addrs.length > 0 && addrs.every((a) => inFakeIpPool(a.address))),
-      () => resolve10(false)
+      (addrs) => resolve11(addrs.length > 0 && addrs.every((a) => inFakeIpPool(a.address))),
+      () => resolve11(false)
     ).finally(() => clearTimeout(timer));
   });
   return fakeIpProbe;
@@ -54525,18 +54569,18 @@ function request(u, conn, proxy, signal) {
   const host = bare(u.hostname);
   const port = u.port === "" ? defaultPort(u.protocol) : Number(u.port);
   const path8 = u.pathname + u.search;
-  return new Promise((resolve10, reject) => {
+  return new Promise((resolve11, reject) => {
     const onErr = (err) => reject(fail5(causeCode(err)));
     if (proxy === void 0) {
       const mod = u.protocol === "https:" ? https : http;
       const req = mod.request({ host: conn.address, port, path: path8, signal, servername: tlsName(host), headers: { ...baseHeaders(), host: u.host } });
-      req.on("response", resolve10).on("error", onErr).end();
+      req.on("response", resolve11).on("error", onErr).end();
       return;
     }
     const proxyHeaders = proxy.auth === void 0 ? { ...baseHeaders() } : { ...baseHeaders(), "proxy-authorization": proxy.auth };
     if (u.protocol === "http:") {
       const req = http.request({ host: conn.address, port: conn.port, path: u.href, signal, headers: { host: u.host, ...proxyHeaders } });
-      req.on("response", resolve10).on("error", onErr).end();
+      req.on("response", resolve11).on("error", onErr).end();
       return;
     }
     const authority = (isIP(host) === 6 ? "[" + host + "]" : host) + ":" + port;
@@ -54556,16 +54600,16 @@ function request(u, conn, proxy, signal) {
         headers: { ...baseHeaders(), host: u.host },
         createConnection: () => tlsConnect({ socket, host, servername: tlsName(host) })
       });
-      req.on("response", resolve10).on("error", onErr).end();
+      req.on("response", resolve11).on("error", onErr).end();
     });
     tunnel.end();
   });
 }
 function readBody(res) {
-  return new Promise((resolve10, reject) => {
+  return new Promise((resolve11, reject) => {
     const parts = [];
     res.on("data", (b) => parts.push(b));
-    res.on("end", () => resolve10(Buffer.concat(parts)));
+    res.on("end", () => resolve11(Buffer.concat(parts)));
     res.on("error", (err) => reject(fail5(causeCode(err))));
     res.on("aborted", () => reject(fail5("ECONNRESET")));
   });
@@ -58442,7 +58486,7 @@ function missingOrOutside(given, abs, root, hostRoots) {
   return new CtxError("OUTSIDE_ROOT", { p: given, root });
 }
 function pathItems(input, project, hostRoots) {
-  const abs = resolve9(project.worktree, input.path);
+  const abs = resolve10(project.worktree, input.path);
   const allowed = allowedRootOf(project.containmentRoot, hostRoots, abs);
   if (allowed === void 0) throw missingOrOutside(input.path, abs, project.containmentRoot, hostRoots);
   const base = relative3(project.worktree, abs);
@@ -60047,7 +60091,7 @@ async function startServer(argv, env) {
   }
   installExitGuard({ onShutdown: shutdown, isTTY: process.stdin.isTTY === true });
   handle = serveStdio(createServer);
-  await new Promise((resolve10) => process.once("exit", () => resolve10()));
+  await new Promise((resolve11) => process.once("exit", () => resolve11()));
 }
 if (isEntry(import.meta.main, process.argv[1], fileURLToPath3(import.meta.url))) {
   const [, , ...cliArgs] = process.argv;

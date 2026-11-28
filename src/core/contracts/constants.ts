@@ -123,6 +123,8 @@ export const SOURCE_HANDLE_MAX_DIGITS = 10;
 
 // Time budgets (ms)
 export const EXEC_TIMEOUT_MS = 600000; // S-TIMEOUT, Q8: default and max
+// Antigravity host drops MCP tool calls at 180s; cap ctx_execute at 150s so partial stdout returns cleanly before drop.
+export const ANTIGRAVITY_EXEC_TIMEOUT_MS = 150000;
 export const KILL_GRACE_MS = 1000; // GP4
 // D-1337-EXIT-SETTLE-1 (#1337): after the child exits, runProcess waits this long for the pipes to end; each data chunk restarts it.
 export const PIPE_EOF_GRACE_MS = 250;
@@ -345,6 +347,8 @@ export const DENY_WEBFETCH_JOIN = ", then "; // "Tool: <p>ctx_index, then <p>ctx
 export const POLICY_UNREADABLE_WARNING = "context-mode: your deny rules could not be read, so they are not applied. Fix: run ctx_doctor."; // E2, flag unset (stderr)
 // ADR-0008 item 6, #1006/#945: WebFetch to these hosts (or a subdomain) is never denied (claude.ai artifacts).
 export const NEVER_DENY_HOSTS = Object.freeze(["claude.ai", "claude.site", "claudeusercontent.com"] as const);
+// Loopback hosts allowed for lightweight local dev-server HTTP probes on Antigravity without sandbox overhead.
+export const LOOPBACK_HOSTS = Object.freeze(["localhost", "127.0.0.1", "[::1]", "::1"] as const);
 
 // impl/08 §6.1 step 5c rule tables (argv0 compared lowercased, after unwrap and baseName).
 export const CURL_COMMANDS = Object.freeze(["curl", "wget"] as const);

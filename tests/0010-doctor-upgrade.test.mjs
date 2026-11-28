@@ -576,14 +576,15 @@ describe("ADR-0010 doctor D3 and D1 on native Antigravity", { concurrency: CONC 
     put(path.join(pluginDir, "mcp_config.json"), JSON.stringify({
       mcpServers: { "context-mode": { command: "node", args: ["${PLUGIN_ROOT}/server.mjs", "--agent", "antigravity"] } },
     }));
-    const matcher = composeMatcher(row, "PreToolUse").replace("mcp_context-mode_ctx_.*", "mcp_context-mode_context-mode_ctx_.*");
+    const preMatcher = composeMatcher(row, "PreToolUse").replace("mcp_context-mode_ctx_.*", "mcp_context-mode_context-mode_ctx_.*");
+    const postMatcher = composeMatcher(row, "PostToolUse").replace("mcp_context-mode_ctx_.*", "mcp_context-mode_context-mode_ctx_.*");
     put(path.join(pluginDir, "hooks.json"), JSON.stringify({
       "context-mode": {
         enabled: true,
         SessionStart: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }],
         PreInvocation: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }],
-        PreToolUse: [{ matcher, hooks: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }] }],
-        PostToolUse: [{ matcher, hooks: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }] }],
+        PreToolUse: [{ matcher: preMatcher, hooks: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }] }],
+        PostToolUse: [{ matcher: postMatcher, hooks: [{ type: "command", command: "node ./hook.mjs --agent antigravity", timeout: 5 }] }],
       },
     }));
     const d3 = checkHostConfig(row, { HOME: home, USERPROFILE: home }, home);
@@ -602,14 +603,15 @@ describe("ADR-0010 doctor D3 and D1 on native Antigravity", { concurrency: CONC 
     put(path.join(cfg, "mcp_config.json"), JSON.stringify({
       mcpServers: { "context-mode": { command: "node", args: [path.join(ownBundleDir(), "server.mjs"), "--agent", "antigravity"], tools: C.ANTIGRAVITY_EAGER_TOOLS } },
     }));
-    const matcher = composeMatcher(row, "PreToolUse");
+    const preMatcher = composeMatcher(row, "PreToolUse");
+    const postMatcher = composeMatcher(row, "PostToolUse");
     put(path.join(cfg, "hooks.json"), JSON.stringify({
       "context-mode": {
         enabled: true,
         SessionStart: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }],
         PreInvocation: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }],
-        PreToolUse: [{ matcher, hooks: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }] }],
-        PostToolUse: [{ matcher, hooks: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }] }],
+        PreToolUse: [{ matcher: preMatcher, hooks: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }] }],
+        PostToolUse: [{ matcher: postMatcher, hooks: [{ type: "command", command: 'node "/pkg/hook.mjs" --agent antigravity', timeout: 5 }] }],
       },
     }));
     const d3 = checkHostConfig(row, { HOME: home, USERPROFILE: home }, home);

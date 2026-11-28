@@ -9,7 +9,7 @@ import {
   BUILD_COMMANDS, CURL_COMMANDS, CURL_DUMP_HEADER_FLAG, CURL_SILENT_FLAGS, CURL_VERBOSE_FLAGS,
   DENY_EXEC_TOOL, DENY_INTENT_DEFAULT, DENY_PREFIX, DENY_RUN_HERE_LINE, DENY_TOOL_LABEL, DENY_WEBFETCH_JOIN,
   DENY_WEBFETCH_TOOLS, DENY_WHAT, DENY_WHAT_SUFFIX, DUMP_COUNT_COMMANDS, DUMP_COUNT_FLAGS, FETCH_CALL, FETCH_QUOTES,
-  HTTP_SCHEME, INLINE_HTTP_CALLS, JQ_COMMAND, JQ_WHITELIST, NEVER_DENY_HOSTS,
+  HTTP_SCHEME, INLINE_HTTP_CALLS, JQ_COMMAND, JQ_WHITELIST, LOOPBACK_HOSTS, NEVER_DENY_HOSTS,
   OUTPUT_CAP, PARSE_ERROR_DENY_LINE, prefixToolNames, POLICY_UNREADABLE_LINE, POLICY_UNREADABLE_WARNING,
   READ_PATH_KEYS, READ_PATH_LIST_KEY, REQUIRE_SECURITY_ENV, SED_COMMAND, SED_QUIET_FLAGS, SHELL_DUMP_COMMANDS, SHELL_FAMILY,
   USER_DENY_REASON_PREFIX,
@@ -228,18 +228,46 @@ function bash(ev: CanonicalHookEvent, row: AdapterRow, input: Record<string, unk
   // On a replace row the main agent runs the command and PostToolUse replaces a large result (D-M7-RR-1).
   if (!hasReplace(row) || isSubagentCall(ev)) {
     for (const c of cmds) {
-      const kind = denyKind(c);
+      const kind = denyKind(c, ev);
       if (kind !== null) return deny(denyMessage(kind, cmd, row, str(input.description)));
     }
   }
   return shellDump(ev, cmds, row, root) ?? psShellDump(ev, cmd, row, root) ?? ALLOW; // 6a: file size known by stat, kept (D-M7-RR-1)
 }
 
+/** True when raw contains at least one http(s):// URL and EVERY one targets a loopback host (no regex). */
+function onlyLoopbackHttp(raw: string): boolean {
+  const low = raw.toLowerCase();
+  const stopChars = " \t\r\n'\"`),;]}";
+  let found = 0;
+  let pos = 0;
+  while (pos < low.length) {
+    const atHttp = low.indexOf("http://", pos);
+    const atHttps = low.indexOf("https://", pos);
+    const at = atHttp < 0 ? atHttps : atHttps < 0 ? atHttp : Math.min(atHttp, atHttps);
+    if (at < 0) break;
+    let end = at;
+    while (end < low.length && !stopChars.includes(low.charAt(end))) end++;
+    const rawUrl = raw.slice(at, end);
+    let host: string;
+    try {
+      host = new URL(rawUrl).hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+    if (!(LOOPBACK_HOSTS as readonly string[]).includes(host)) return false;
+    found++;
+    pos = end;
+  }
+  return found > 0;
+}
+
 /** 5c, in the §6.1 order: curl/wget, inline HTTP, build tool. */
-function denyKind(c: SimpleCommand): DenyKind | null {
+function denyKind(c: SimpleCommand, ev: CanonicalHookEvent): DenyKind | null {
   const name = c.argv0.toLowerCase();
-  if (has(CURL_COMMANDS, name) && bodyReachesOutput(name as "curl" | "wget", c)) return "curl";
-  if (inlineHttp(c.raw)) return "http";
+  const loopbackBypass = ev.agent === "antigravity" && onlyLoopbackHttp(c.raw);
+  if (has(CURL_COMMANDS, name) && bodyReachesOutput(name as "curl" | "wget", c)) return loopbackBypass ? null : "curl";
+  if (inlineHttp(c.raw)) return loopbackBypass ? null : "http";
   if (has(BUILD_COMMANDS, name)) return "build";
   return null;
 }

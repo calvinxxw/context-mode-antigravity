@@ -472,6 +472,16 @@ function pathOf(input: Record<string, unknown>): string | null {
   return null;
 }
 
+function editPathsOf(input: Record<string, unknown>): string[] {
+  const raw = input.file_paths;
+  if (Array.isArray(raw)) {
+    const out = raw.filter((v): v is string => typeof v === "string" && v !== "");
+    if (out.length > 0) return out;
+  }
+  const single = pathOf(input);
+  return single === null ? [] : [single];
+}
+
 async function postToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: ProjectContext, env: NodeJS.ProcessEnv, settle: Settle): Promise<Decision> {
   const tool = ev.tool;
   if (tool === undefined || tool.canonicalName.startsWith(OWN_TOOL_PREFIX)) return ALLOW; // step 1 (ADR-0009 §0)
@@ -486,6 +496,21 @@ async function postToolUse(ev: CanonicalHookEvent, row: AdapterRow, project: Pro
   // D-STATS-RET-3: and after the encode stage, so a failed encode (the host gets the whole output) is not a saving.
   const journal = (returned: number): void => {
     if (kind === null) return;
+    if (kind === "edit" && tool.input.dryRun === true) return;
+    if (kind === "edit") {
+      const paths = editPathsOf(tool.input);
+      if (paths.length > 1) {
+        for (let i = 0; i < paths.length; i++) {
+          appendDetached(project, ev.sessionId, {
+            session_id: ev.sessionId, worktree: project.worktree, agent: ev.agent, kind, tool: tool.canonicalName, key: null,
+            path: paths[i], ok: result.isError ? 0 : 1, exit_code: exitCodeOf(text),
+            bytes: i === 0 ? result.bytes : 0, body: i === 0 ? text : "", turn: ev.turn ?? 0,
+            sandbox_bytes: i === 0 ? result.bytes : 0, returned_bytes: i === 0 ? returned : 0,
+          });
+        }
+        return;
+      }
+    }
     const key = kind === "cmd" ? canonicalKey(tool.canonicalName, str(tool.input.command))
       : kind === "toolerr" ? tool.canonicalName + ":" + stableJson(tool.input) : null; // step 3
     appendDetached(project, ev.sessionId, { // step 4; body is the whole text (D-M3-H2-6)

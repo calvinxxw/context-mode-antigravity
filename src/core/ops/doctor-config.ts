@@ -15,7 +15,7 @@ import {
   VSCODE_DIR_NAME, VSCODE_SETTINGS_FILE, OMP_CONTENT_INFO, OMP_ENABLE_COMMAND, OMP_FLOOR_INFO, OMP_IMPORT_INFO, OMP_MIN_VERSION, OMP_PRINT_MODE_INFO,
   OMP_SCRIPTS_INFO, PI_PACKAGE_JSON_FILE, REPLACE_TRIGGER_ENV, REPLACE_TRIGGER_RETIRED_INFO,
 } from "../contracts/constants.ts";
-import { PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX } from "../../adapters/antigravity.ts";
+import { PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX, POST_EDIT_TOOL_NAMES as ANTIGRAVITY_POST_EDIT_TOOLS } from "../../adapters/antigravity.ts";
 import type { AdapterRow, AgentId, DoctorRow } from "../contracts/types.ts";
 import { hasReplace } from "../../adapters/table.ts";
 import { claudeDirOf, codexDirOf, copilotDirOf, homeDirOf, kiroDirOf, ompPluginsDirOf, opencodeDirOf, ownMcpFileOf, piAgentDirOf } from "../project/config-dir.ts";
@@ -53,11 +53,16 @@ function readParsed(agent: AgentId, file: string): { value: unknown; text: strin
 
 /** The matcher text the row composes: same rule as build/manifests.ts buildMatcher (D-M5-arch-3). Never compiled here. */
 export function composeMatcher(row: AdapterRow, event?: string): string {
-  let prefix = "";
-  for (const ch of row.toolNamePrefix) prefix += REGEX_SPECIAL_CHARS.includes(ch) ? REGEX_ESCAPE + ch : ch;
+  const escape = (s: string): string => {
+    let out = "";
+    for (const ch of s) out += REGEX_SPECIAL_CHARS.includes(ch) ? REGEX_ESCAPE + ch : ch;
+    return out;
+  };
+  const prefix = escape(row.toolNamePrefix);
   const names = Object.values(row.nativeTools).flat();
   const alts = [...names, prefix + OWN_TOOL_PREFIX + MATCHER_ANY];
   if (event === POST_TOOL_USE && hasReplace(row)) alts.push(MCP_ANY_MATCH); // D-M2-MCP-1
+  if (event === POST_TOOL_USE && row.id === "antigravity") alts.push(...ANTIGRAVITY_POST_EDIT_TOOLS.map(escape));
   return MATCHER_OPEN + alts.join(MATCHER_ALT) + MATCHER_CLOSE;
 }
 

@@ -9,7 +9,7 @@
             "type": "command"
           }
         ],
-        "matcher": "^(run_command|view_file|read_file|grep_search|read_url_content|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file|mcp_context-mode_ctx_.*)$"
+        "matcher": "^(run_command|view_file|read_file|grep_search|read_url_content|write_to_file|replace_file_content|multi_replace_file_content|write_file|edit_file|mcp_context-mode_ctx_.*|mcp_agy-fast_fast_apply_edits)$"
       }
     ],
     "PreInvocation": [

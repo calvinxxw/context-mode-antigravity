@@ -210,6 +210,7 @@ var BOUNDED_UNLESS_VERBOSE = Object.freeze(["cp", "mv", "rm"]);
 var VERBOSE_FLAGS = Object.freeze(["-v", "--verbose"]);
 var JQ_WHITELIST = Object.freeze({ identity: ".", length: "length", pipeLength: "| length", fieldSep: "." });
 var NEVER_DENY_HOSTS = Object.freeze(["claude.ai", "claude.site", "claudeusercontent.com"]);
+var LOOPBACK_HOSTS = Object.freeze(["localhost", "127.0.0.1", "[::1]", "::1"]);
 var CURL_COMMANDS = Object.freeze(["curl", "wget"]);
 var CURL_SILENT_FLAGS = Object.freeze({ curl: { short: "s", long: "--silent" }, wget: { short: "q", long: "--quiet" } });
 var CURL_VERBOSE_FLAGS = Object.freeze(["-v", "--verbose", "--trace", "--trace-ascii"]);
@@ -1525,6 +1526,7 @@ function encode10(ev, d, _extra) {
 }
 
 // src/adapters/antigravity.ts
+import { isAbsolute, resolve } from "node:path";
 var TOOL_NAME_PREFIX11 = "mcp_context-mode_";
 var PLUGIN_TOOL_NAME_PREFIX2 = "mcp_context-mode_context-mode_";
 var UNDERSCORE_TOOL_PREFIX = "mcp_context_mode_";
@@ -1538,6 +1540,9 @@ var EDIT_TOOL_NAMES = Object.freeze([
   "multi_replace_file_content",
   "write_file",
   "edit_file"
+]);
+var POST_EDIT_TOOL_NAMES = Object.freeze([
+  "mcp_agy-fast_fast_apply_edits"
 ]);
 var EVENT_MAP = Object.freeze({
   SessionStart: "SessionStart",
@@ -1565,6 +1570,7 @@ var NATIVE_TO_CANONICAL8 = {
   replace_file_content: "Edit",
   multi_replace_file_content: "Edit",
   edit_file: "Edit",
+  "mcp_agy-fast_fast_apply_edits": "Edit",
   ask_question: "AskUserQuestion"
 };
 var CALL_MCP_TOOL = "call_mcp_tool";
@@ -1589,6 +1595,7 @@ function canonicalName6(name, args) {
     const tool = str(own2(args, "ToolName"));
     if (server !== void 0 && tool !== void 0) {
       if (OWN_SERVER_NAMES.includes(server) && tool.startsWith(OWN_TOOL_PREFIX2)) return tool;
+      if (server === "agy-fast_fast" && tool === "apply_edits") return "Edit";
       return "mcp:" + server + ":" + tool;
     }
     return name;
@@ -1603,36 +1610,59 @@ function canonicalName6(name, args) {
   if (sep3 <= 0 || sep3 === rest.length - 1) return name;
   return "mcp:" + rest.slice(0, sep3) + ":" + rest.slice(sep3 + MCP_SEP4.length);
 }
-function normalizeInput(name, canonical, args) {
-  if (name === CALL_MCP_TOOL) {
-    const inner = own2(args, "Arguments");
-    if (isRecord3(inner)) return { ...args, ...inner };
-    return args;
+function extractBatchEditPaths(args) {
+  let editsRaw = own2(args, "edits");
+  if (typeof editsRaw === "string") {
+    try {
+      editsRaw = JSON.parse(editsRaw);
+    } catch {
+      return [];
+    }
   }
-  const out2 = { ...args };
+  if (!Array.isArray(editsRaw)) return [];
+  const baseCwd = str(own2(args, "cwd"));
+  const paths = [];
+  for (const item of editsRaw) {
+    if (!isRecord3(item)) continue;
+    const rawPath = str(own2(item, "path"));
+    if (rawPath === void 0) continue;
+    const resolved = baseCwd !== void 0 && !isAbsolute(rawPath) ? resolve(baseCwd, rawPath) : rawPath;
+    if (!paths.includes(resolved)) paths.push(resolved);
+  }
+  return paths;
+}
+function normalizeInput(name, canonical, args) {
+  const effectiveArgs = name === CALL_MCP_TOOL && isRecord3(own2(args, "Arguments")) ? { ...args, ...own2(args, "Arguments") } : args;
+  if (name === CALL_MCP_TOOL && canonical !== "Edit") return effectiveArgs;
+  const out2 = { ...effectiveArgs };
   if (canonical === "Bash") {
-    const cmd = str(own2(args, "CommandLine")) ?? str(own2(args, "command"));
+    const cmd = str(own2(effectiveArgs, "CommandLine")) ?? str(own2(effectiveArgs, "command"));
     if (cmd !== void 0 && own2(out2, "command") === void 0) out2.command = cmd;
-    const desc = str(own2(args, "toolSummary")) ?? str(own2(args, "description"));
+    const desc = str(own2(effectiveArgs, "toolSummary")) ?? str(own2(effectiveArgs, "description"));
     if (desc !== void 0 && own2(out2, "description") === void 0) out2.description = desc;
   } else if (canonical === "Read") {
-    const fp = str(own2(args, "AbsolutePath")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    const fp = str(own2(effectiveArgs, "AbsolutePath")) ?? str(own2(effectiveArgs, "Path")) ?? str(own2(effectiveArgs, "file_path"));
     if (fp !== void 0 && own2(out2, "file_path") === void 0) out2.file_path = fp;
-    const start = own2(args, "StartLine");
+    const start = own2(effectiveArgs, "StartLine");
     if (start !== void 0 && start !== null && own2(out2, "offset") === void 0) out2.offset = start;
-    const end = own2(args, "EndLine");
+    const end = own2(effectiveArgs, "EndLine");
     if (end !== void 0 && end !== null && own2(out2, "limit") === void 0) out2.limit = end;
   } else if (canonical === "Grep") {
-    const pat = str(own2(args, "Query")) ?? str(own2(args, "Pattern"));
+    const pat = str(own2(effectiveArgs, "Query")) ?? str(own2(effectiveArgs, "Pattern"));
     if (pat !== void 0 && own2(out2, "pattern") === void 0) out2.pattern = pat;
-    const sp = str(own2(args, "SearchPath"));
+    const sp = str(own2(effectiveArgs, "SearchPath"));
     if (sp !== void 0 && own2(out2, "path") === void 0) out2.path = sp;
   } else if (canonical === "WebFetch") {
-    const url = str(own2(args, "Url")) ?? str(own2(args, "url"));
+    const url = str(own2(effectiveArgs, "Url")) ?? str(own2(effectiveArgs, "url"));
     if (url !== void 0 && own2(out2, "url") === void 0) out2.url = url;
   } else if (canonical === "Write" || canonical === "Edit") {
-    const fp = str(own2(args, "TargetFile")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    const fp = str(own2(effectiveArgs, "TargetFile")) ?? str(own2(effectiveArgs, "Path")) ?? str(own2(effectiveArgs, "file_path"));
     if (fp !== void 0 && own2(out2, "file_path") === void 0) out2.file_path = fp;
+    const batchPaths = extractBatchEditPaths(effectiveArgs);
+    if (batchPaths.length > 0) {
+      out2.file_paths = batchPaths;
+      if (own2(out2, "file_path") === void 0) out2.file_path = batchPaths[0];
+    }
   }
   return out2;
 }
@@ -5126,7 +5156,7 @@ ${i2}
 }).prompt();
 
 // src/core/project/config-dir.ts
-import { basename, dirname as dirname2, join as join2, posix, resolve, win32 } from "node:path";
+import { basename, dirname as dirname2, join as join2, posix, resolve as resolve2, win32 } from "node:path";
 
 // src/core/contracts/errors.ts
 var ERROR_TEXT = Object.freeze({
@@ -5218,7 +5248,7 @@ function codexDirOf(env, home) {
   return dir !== void 0 && dir !== "" ? dir : join2(home, ...AGENT_HOME_DIR.codex);
 }
 function codexPluginHomeOf(bundleDir) {
-  let dir = resolve(bundleDir);
+  let dir = resolve2(bundleDir);
   while (dirname2(dir) !== dir) {
     const up = dirname2(dir);
     if (basename(dir) === PLUGIN_CACHE_DIR_NAME && basename(up) === HOST_PLUGINS_DIR_NAME) return dirname2(up);
@@ -5301,7 +5331,7 @@ function ownMcpFileOf(agent, file, env, home) {
 }
 function dataRootOf(env, home) {
   const dir = env[DATA_DIR_ENV];
-  return dir !== void 0 && dir !== "" ? resolve(dir) : join2(home, DATA_ROOT.slice(1));
+  return dir !== void 0 && dir !== "" ? resolve2(dir) : join2(home, DATA_ROOT.slice(1));
 }
 
 // src/core/ops/doctor-issue.ts
@@ -5310,17 +5340,17 @@ import { closeSync as closeSync2, existsSync as existsSync12, fstatSync, mkdirSy
 import { delimiter, dirname as dirname8, join as join13 } from "node:path";
 
 // src/core/hooks/fallback.ts
-import { join as join5, resolve as resolve4 } from "node:path";
+import { join as join5, resolve as resolve5 } from "node:path";
 
 // src/core/policy/read-media.ts
 import { extname } from "node:path";
 var { closeSync, openSync, readSync } = process.getBuiltinModule("node:fs");
 
 // src/core/policy/own-file.ts
-import { extname as extname2, join as join4, resolve as resolve3 } from "node:path";
+import { extname as extname2, join as join4, resolve as resolve4 } from "node:path";
 
 // src/core/project/contain.ts
-import { dirname as dirname3, isAbsolute, join as join3, relative, resolve as resolve2, sep } from "node:path";
+import { dirname as dirname3, isAbsolute as isAbsolute2, join as join3, relative, resolve as resolve3, sep } from "node:path";
 var { lstatSync: lstatSync2, realpathSync: realpathSync2 } = process.getBuiltinModule("node:fs");
 function components(p3) {
   return p3.split(sep).filter((c3) => c3 !== "");
@@ -5473,7 +5503,7 @@ var { existsSync: existsSync3, linkSync, mkdirSync: mkdirSync2, renameSync, rmSy
 
 // src/core/ops/doctor-config.ts
 import { existsSync as existsSync11, readdirSync as readdirSync5, readFileSync as readFileSync8 } from "node:fs";
-import { dirname as dirname7, isAbsolute as isAbsolute4, join as join12, resolve as resolve5 } from "node:path";
+import { dirname as dirname7, isAbsolute as isAbsolute5, join as join12, resolve as resolve6 } from "node:path";
 
 // src/core/ops/host-text.ts
 var BOM_CODE = 65279;
@@ -8349,7 +8379,7 @@ function detectV1(agent, home, scope = {}) {
 
 // src/core/ops/plugin-root.ts
 import { existsSync as existsSync7, readdirSync as readdirSync4, readFileSync as readFileSync4, realpathSync as realpathSync3 } from "node:fs";
-import { dirname as dirname6, isAbsolute as isAbsolute2, join as join9, sep as sep2 } from "node:path";
+import { dirname as dirname6, isAbsolute as isAbsolute3, join as join9, sep as sep2 } from "node:path";
 import { fileURLToPath as fileURLToPath2 } from "node:url";
 
 // src/setup/pi-gate.ts
@@ -8454,7 +8484,7 @@ function piSettingsGate(env, home, pkgDir, cwd) {
 
 // src/core/ops/doctor-env.ts
 import { existsSync as existsSync9, readFileSync as readFileSync6, realpathSync as realpathSync5 } from "node:fs";
-import { isAbsolute as isAbsolute3, join as join10, relative as relative2 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join10, relative as relative2 } from "node:path";
 
 // src/core/ops/omp-import.ts
 import { join as join11 } from "node:path";
@@ -8527,11 +8557,16 @@ function ompImportsUs(files, env) {
 var [PART_MCP, PART_HOOKS, PART_TIMEOUT] = D3_PARTS;
 var isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
 function composeMatcher(row, event) {
-  let prefix = "";
-  for (const ch of row.toolNamePrefix) prefix += REGEX_SPECIAL_CHARS.includes(ch) ? REGEX_ESCAPE + ch : ch;
+  const escape = (s) => {
+    let out2 = "";
+    for (const ch of s) out2 += REGEX_SPECIAL_CHARS.includes(ch) ? REGEX_ESCAPE + ch : ch;
+    return out2;
+  };
+  const prefix = escape(row.toolNamePrefix);
   const names = Object.values(row.nativeTools).flat();
   const alts = [...names, prefix + OWN_TOOL_PREFIX + MATCHER_ANY];
   if (event === POST_TOOL_USE && hasReplace(row)) alts.push(MCP_ANY_MATCH);
+  if (event === POST_TOOL_USE && row.id === "antigravity") alts.push(...POST_EDIT_TOOL_NAMES.map(escape));
   return MATCHER_OPEN + alts.join(MATCHER_ALT) + MATCHER_CLOSE;
 }
 var CODEX_PLUGIN_KEY = `${SERVER_KEY}@${SERVER_KEY}`;
@@ -8636,7 +8671,7 @@ function opencodeDirPlugins(dirs) {
         const loads2 = lits.some((p3) => {
           if (isModule(p3)) return packageResolves(dirname7(f2));
           const bare = p3.startsWith(FILE_URL_PREFIX) ? p3.slice(FILE_URL_PREFIX.length) : p3;
-          return existsSync11(isAbsolute4(bare) ? bare : resolve5(dirname7(f2), bare));
+          return existsSync11(isAbsolute5(bare) ? bare : resolve6(dirname7(f2), bare));
         });
         out2.push({ file: f2, loads: loads2 });
       }
@@ -9470,14 +9505,14 @@ async function listPluginHooks(env, pluginId, cwd) {
 function askPluginHooks(env, pluginId, cwd) {
   const bin = whichBin("codex", env);
   if (!bin) return Promise.resolve({ kind: "absent" });
-  return new Promise((resolve6) => {
+  return new Promise((resolve7) => {
     let asked;
     const done_ = (hooks) => hooks === void 0 ? { kind: "silent" } : { kind: "list", hooks, codexHome: asked };
     let f2;
     try {
       f2 = spawnForm(bin, ["app-server"], env);
     } catch {
-      resolve6({ kind: "silent" });
+      resolve7({ kind: "silent" });
       return;
     }
     const child = spawn3(f2.command, f2.args, { env, cwd, stdio: ["pipe", "pipe", "ignore"], windowsVerbatimArguments: f2.windowsVerbatimArguments, windowsHide: true });
@@ -9487,7 +9522,7 @@ function askPluginHooks(env, pluginId, cwd) {
     let result;
     const settle = () => {
       clearTimeout(grace);
-      resolve6(done_(result));
+      resolve7(done_(result));
     };
     let grace;
     const finish2 = (v) => {
@@ -9626,12 +9661,12 @@ function frame(buf) {
 function listCopilotHooks(env, file, cwd) {
   const bin = whichBin("copilot", env);
   if (!bin) return Promise.resolve(void 0);
-  return new Promise((resolve6) => {
+  return new Promise((resolve7) => {
     let f2;
     try {
       f2 = spawnForm(bin, ["--server", "--stdio", "--no-auto-update"], env);
     } catch {
-      resolve6(void 0);
+      resolve7(void 0);
       return;
     }
     const child = spawn4(f2.command, f2.args, { env, cwd, stdio: ["pipe", "pipe", "ignore"], windowsVerbatimArguments: f2.windowsVerbatimArguments, windowsHide: true });
@@ -9643,7 +9678,7 @@ function listCopilotHooks(env, file, cwd) {
       clearTimeout(timer);
       child.stdin.destroy();
       child.kill();
-      resolve6(v);
+      resolve7(v);
     };
     const timer = setTimeout(() => finish2(void 0), ASK_TIMEOUT_MS2);
     child.on("error", () => finish2(void 0));
@@ -10280,7 +10315,7 @@ function degradedDetail(node, env) {
   return `only ctx_doctor is served: ${D2_SQLITE_DETAIL} under ${node}${v ? ` ${v}` : ""}. Fix: ${D2_SQLITE_FIX}`;
 }
 function mcpCheck(cmd, env) {
-  return new Promise((resolve6) => {
+  return new Promise((resolve7) => {
     const child = spawn5(cmd[0], cmd.slice(1), { env, stdio: ["pipe", "pipe", "ignore"], detached: process.platform !== "win32", windowsHide: true });
     const reap = () => {
       child.kill();
@@ -10292,7 +10327,7 @@ function mcpCheck(cmd, env) {
       clearTimeout(timer);
       process.off("exit", reap);
       child.kill();
-      resolve6({ name: "mcp", ok, detail });
+      resolve7({ name: "mcp", ok, detail });
     };
     const timer = setTimeout(() => done(false, "no MCP answer before timeout"), VERIFY_TIMEOUT_MS);
     child.on("error", (e) => done(false, e.message));

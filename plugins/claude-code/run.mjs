@@ -255,6 +255,7 @@ var JQ_WHITELIST = Object.freeze({ identity: ".", length: "length", pipeLength: 
 var DENY_WEBFETCH_JOIN = ", then ";
 var POLICY_UNREADABLE_WARNING = "context-mode: your deny rules could not be read, so they are not applied. Fix: run ctx_doctor.";
 var NEVER_DENY_HOSTS = Object.freeze(["claude.ai", "claude.site", "claudeusercontent.com"]);
+var LOOPBACK_HOSTS = Object.freeze(["localhost", "127.0.0.1", "[::1]", "::1"]);
 var CURL_COMMANDS = Object.freeze(["curl", "wget"]);
 var CURL_SILENT_FLAGS = Object.freeze({ curl: { short: "s", long: "--silent" }, wget: { short: "q", long: "--quiet" } });
 var CURL_VERBOSE_FLAGS = Object.freeze(["-v", "--verbose", "--trace", "--trace-ascii"]);
@@ -1508,6 +1509,7 @@ function encode10(ev, d, _extra) {
 }
 
 // src/adapters/antigravity.ts
+import { isAbsolute, resolve } from "node:path";
 var TOOL_NAME_PREFIX11 = "mcp_context-mode_";
 var PLUGIN_TOOL_NAME_PREFIX2 = "mcp_context-mode_context-mode_";
 var UNDERSCORE_TOOL_PREFIX = "mcp_context_mode_";
@@ -1521,6 +1523,9 @@ var EDIT_TOOL_NAMES = Object.freeze([
   "multi_replace_file_content",
   "write_file",
   "edit_file"
+]);
+var POST_EDIT_TOOL_NAMES = Object.freeze([
+  "mcp_agy-fast_fast_apply_edits"
 ]);
 var EVENT_MAP = Object.freeze({
   SessionStart: "SessionStart",
@@ -1548,6 +1553,7 @@ var NATIVE_TO_CANONICAL8 = {
   replace_file_content: "Edit",
   multi_replace_file_content: "Edit",
   edit_file: "Edit",
+  "mcp_agy-fast_fast_apply_edits": "Edit",
   ask_question: "AskUserQuestion"
 };
 var CALL_MCP_TOOL = "call_mcp_tool";
@@ -1572,6 +1578,7 @@ function canonicalName6(name, args) {
     const tool = str(own2(args, "ToolName"));
     if (server !== void 0 && tool !== void 0) {
       if (OWN_SERVER_NAMES.includes(server) && tool.startsWith(OWN_TOOL_PREFIX)) return tool;
+      if (server === "agy-fast_fast" && tool === "apply_edits") return "Edit";
       return "mcp:" + server + ":" + tool;
     }
     return name;
@@ -1586,36 +1593,59 @@ function canonicalName6(name, args) {
   if (sep3 <= 0 || sep3 === rest.length - 1) return name;
   return "mcp:" + rest.slice(0, sep3) + ":" + rest.slice(sep3 + MCP_SEP4.length);
 }
-function normalizeInput(name, canonical, args) {
-  if (name === CALL_MCP_TOOL) {
-    const inner = own2(args, "Arguments");
-    if (isRecord3(inner)) return { ...args, ...inner };
-    return args;
+function extractBatchEditPaths(args) {
+  let editsRaw = own2(args, "edits");
+  if (typeof editsRaw === "string") {
+    try {
+      editsRaw = JSON.parse(editsRaw);
+    } catch {
+      return [];
+    }
   }
-  const out = { ...args };
+  if (!Array.isArray(editsRaw)) return [];
+  const baseCwd = str(own2(args, "cwd"));
+  const paths = [];
+  for (const item of editsRaw) {
+    if (!isRecord3(item)) continue;
+    const rawPath = str(own2(item, "path"));
+    if (rawPath === void 0) continue;
+    const resolved = baseCwd !== void 0 && !isAbsolute(rawPath) ? resolve(baseCwd, rawPath) : rawPath;
+    if (!paths.includes(resolved)) paths.push(resolved);
+  }
+  return paths;
+}
+function normalizeInput(name, canonical, args) {
+  const effectiveArgs = name === CALL_MCP_TOOL && isRecord3(own2(args, "Arguments")) ? { ...args, ...own2(args, "Arguments") } : args;
+  if (name === CALL_MCP_TOOL && canonical !== "Edit") return effectiveArgs;
+  const out = { ...effectiveArgs };
   if (canonical === "Bash") {
-    const cmd = str(own2(args, "CommandLine")) ?? str(own2(args, "command"));
+    const cmd = str(own2(effectiveArgs, "CommandLine")) ?? str(own2(effectiveArgs, "command"));
     if (cmd !== void 0 && own2(out, "command") === void 0) out.command = cmd;
-    const desc = str(own2(args, "toolSummary")) ?? str(own2(args, "description"));
+    const desc = str(own2(effectiveArgs, "toolSummary")) ?? str(own2(effectiveArgs, "description"));
     if (desc !== void 0 && own2(out, "description") === void 0) out.description = desc;
   } else if (canonical === "Read") {
-    const fp = str(own2(args, "AbsolutePath")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    const fp = str(own2(effectiveArgs, "AbsolutePath")) ?? str(own2(effectiveArgs, "Path")) ?? str(own2(effectiveArgs, "file_path"));
     if (fp !== void 0 && own2(out, "file_path") === void 0) out.file_path = fp;
-    const start = own2(args, "StartLine");
+    const start = own2(effectiveArgs, "StartLine");
     if (start !== void 0 && start !== null && own2(out, "offset") === void 0) out.offset = start;
-    const end = own2(args, "EndLine");
+    const end = own2(effectiveArgs, "EndLine");
     if (end !== void 0 && end !== null && own2(out, "limit") === void 0) out.limit = end;
   } else if (canonical === "Grep") {
-    const pat = str(own2(args, "Query")) ?? str(own2(args, "Pattern"));
+    const pat = str(own2(effectiveArgs, "Query")) ?? str(own2(effectiveArgs, "Pattern"));
     if (pat !== void 0 && own2(out, "pattern") === void 0) out.pattern = pat;
-    const sp = str(own2(args, "SearchPath"));
+    const sp = str(own2(effectiveArgs, "SearchPath"));
     if (sp !== void 0 && own2(out, "path") === void 0) out.path = sp;
   } else if (canonical === "WebFetch") {
-    const url = str(own2(args, "Url")) ?? str(own2(args, "url"));
+    const url = str(own2(effectiveArgs, "Url")) ?? str(own2(effectiveArgs, "url"));
     if (url !== void 0 && own2(out, "url") === void 0) out.url = url;
   } else if (canonical === "Write" || canonical === "Edit") {
-    const fp = str(own2(args, "TargetFile")) ?? str(own2(args, "Path")) ?? str(own2(args, "file_path"));
+    const fp = str(own2(effectiveArgs, "TargetFile")) ?? str(own2(effectiveArgs, "Path")) ?? str(own2(effectiveArgs, "file_path"));
     if (fp !== void 0 && own2(out, "file_path") === void 0) out.file_path = fp;
+    const batchPaths = extractBatchEditPaths(effectiveArgs);
+    if (batchPaths.length > 0) {
+      out.file_paths = batchPaths;
+      if (own2(out, "file_path") === void 0) out.file_path = batchPaths[0];
+    }
   }
   return out;
 }
@@ -4111,7 +4141,7 @@ function moreLine(intent, label) {
 }
 
 // src/core/policy/decide.ts
-import { resolve as resolve5 } from "node:path";
+import { resolve as resolve6 } from "node:path";
 
 // src/core/policy/lexer.ts
 var OPS = ["&&", "||", ";;", "|&", ";", "|", "&", "(", ")"];
@@ -5056,7 +5086,7 @@ function parseShell(cmd) {
 }
 
 // src/core/policy/powershell.ts
-import { resolve } from "node:path";
+import { resolve as resolve2 } from "node:path";
 var SQ = "'";
 var DQ = '"';
 var TICK = "`";
@@ -5365,7 +5395,7 @@ function walk(script, cwd, depth, found) {
     const name = cmdName(head2.words[0]);
     if (stages.length === 1 && CD_COMMANDS.includes(name)) {
       const t = cdTarget(head2.words);
-      if (t !== null) dir = resolve(dir, t);
+      if (t !== null) dir = resolve2(dir, t);
       continue;
     }
     const inner = depth < MAX_NEST_DEPTH ? nestedScript(name, head2.words) : null;
@@ -5383,7 +5413,7 @@ function walk(script, cwd, depth, found) {
         break;
       }
     }
-    if (shown) found.push(resolve(dir, d.file));
+    if (shown) found.push(resolve2(dir, d.file));
   }
 }
 function psDumpFiles(script, cwd) {
@@ -5396,7 +5426,7 @@ function psDumpFiles(script, cwd) {
 import { join as join2 } from "node:path";
 
 // src/core/project/config-dir.ts
-import { basename, dirname, join, posix, resolve as resolve2, win32 } from "node:path";
+import { basename, dirname, join, posix, resolve as resolve3, win32 } from "node:path";
 var { existsSync: existsSync2, mkdirSync: mkdirSync2, readFileSync, readdirSync, realpathSync } = process.getBuiltinModule("node:fs");
 function homeDirOf(env, platform = process.platform) {
   const set = (v) => v !== void 0 && v !== "";
@@ -5476,7 +5506,7 @@ function requireHomeDir(env, platform = process.platform) {
 }
 function dataRootOf(env, home) {
   const dir = env[DATA_DIR_ENV];
-  return dir !== void 0 && dir !== "" ? resolve2(dir) : join(home, DATA_ROOT.slice(1));
+  return dir !== void 0 && dir !== "" ? resolve3(dir) : join(home, DATA_ROOT.slice(1));
 }
 function resolveConfigDir(env) {
   const set = env[DATA_DIR_ENV];
@@ -5634,7 +5664,7 @@ function unwrap(commands) {
 }
 
 // src/core/policy/user-deny.ts
-import { isAbsolute, join as join3, relative, sep } from "node:path";
+import { isAbsolute as isAbsolute2, join as join3, relative, sep } from "node:path";
 var { readFileSync: readFileSync3 } = process.getBuiltinModule("node:fs");
 var BASH_TOOL = "Bash";
 var READ_TOOL = "Read";
@@ -5742,7 +5772,7 @@ function matchPath(glob, absPath, projectDir) {
   if (glob.startsWith(PROJECT_ANCHOR)) {
     if (projectDir === void 0) return false;
     const rel = relative(projectDir, absPath);
-    if (rel === "" || rel === PARENT || rel.startsWith(PARENT + sep) || isAbsolute(rel)) return false;
+    if (rel === "" || rel === PARENT || rel.startsWith(PARENT + sep) || isAbsolute2(rel)) return false;
     return globMatch(glob.slice(PROJECT_ANCHOR.length), toSlash(rel), true);
   }
   const target = toSlash(absPath);
@@ -5792,10 +5822,10 @@ function READ_DENY_RANGE_MESSAGE(path3, size) {
 }
 
 // src/core/policy/own-file.ts
-import { extname, join as join5, resolve as resolve4 } from "node:path";
+import { extname, join as join5, resolve as resolve5 } from "node:path";
 
 // src/core/project/contain.ts
-import { dirname as dirname2, isAbsolute as isAbsolute2, join as join4, relative as relative2, resolve as resolve3, sep as sep2 } from "node:path";
+import { dirname as dirname2, isAbsolute as isAbsolute3, join as join4, relative as relative2, resolve as resolve4, sep as sep2 } from "node:path";
 var { lstatSync, realpathSync: realpathSync2 } = process.getBuiltinModule("node:fs");
 function real(p) {
   try {
@@ -5828,14 +5858,14 @@ function isInsideAny(roots, p) {
   });
 }
 function hasParentStep(cwd, p) {
-  const parts = isAbsolute2(p) ? components(p) : [...components(cwd), ...components(p)];
+  const parts = isAbsolute3(p) ? components(p) : [...components(cwd), ...components(p)];
   return parts.includes("..");
 }
 var rootParts = /* @__PURE__ */ new Map();
 function lexicalRoot(root) {
   let rc = rootParts.get(root);
   if (rc === void 0) {
-    rc = components(resolve3(root));
+    rc = components(resolve4(root));
     rootParts.set(root, rc);
   }
   return rc;
@@ -5844,7 +5874,7 @@ function isLexicallyInsideAny(roots, p) {
   if (roots.length === 0) return false;
   const raw = components(p);
   if (raw.includes("..")) return false;
-  const qc = sep2 === "/" && isAbsolute2(p) ? raw.filter((c) => c !== ".") : components(resolve3(p));
+  const qc = sep2 === "/" && isAbsolute3(p) ? raw.filter((c) => c !== ".") : components(resolve4(p));
   return roots.some((root) => {
     const rc = lexicalRoot(root);
     return qc.length >= rc.length && rc.every((c, i) => c === qc[i]);
@@ -5883,7 +5913,7 @@ function ownDirsOf(agent, env) {
 function isOwnFile(agent, cwd, p, env = process.env) {
   if (extname(p).toLowerCase() !== AGENT_FILE_EXT) return false;
   const dirs = ownDirsOf(agent, env);
-  const abs = resolve4(cwd, p);
+  const abs = resolve5(cwd, p);
   return !hasParentStep(cwd, p) && isLexicallyInsideAny(dirs, abs) || isInsideAny(dirs, abs);
 }
 
@@ -5975,7 +6005,7 @@ function readPaths(input) {
 }
 function userDenyHit(canonical, input, cwd, rules) {
   if (rules.length === 0) return null;
-  const readRule = (p) => matchesAnyDenyPattern(resolve5(cwd, p), rules, { tool: READ, projectDir: cwd });
+  const readRule = (p) => matchesAnyDenyPattern(resolve6(cwd, p), rules, { tool: READ, projectDir: cwd });
   if (canonical === BASH) {
     const cmd = str2(input.command);
     return cmd === void 0 ? null : matchesAnyDenyPattern(cmd, rules);
@@ -6065,16 +6095,42 @@ function bash(ev, row, input, rules, root) {
   }
   if (!hasReplace(row) || isSubagentCall(ev)) {
     for (const c of cmds) {
-      const kind = denyKind(c);
+      const kind = denyKind(c, ev);
       if (kind !== null) return deny(denyMessage(kind, cmd, row, str2(input.description)));
     }
   }
   return shellDump(ev, cmds, row, root) ?? psShellDump(ev, cmd, row, root) ?? ALLOW;
 }
-function denyKind(c) {
+function onlyLoopbackHttp(raw) {
+  const low = raw.toLowerCase();
+  const stopChars = " 	\r\n'\"`),;]}";
+  let found = 0;
+  let pos = 0;
+  while (pos < low.length) {
+    const atHttp = low.indexOf("http://", pos);
+    const atHttps = low.indexOf("https://", pos);
+    const at2 = atHttp < 0 ? atHttps : atHttps < 0 ? atHttp : Math.min(atHttp, atHttps);
+    if (at2 < 0) break;
+    let end = at2;
+    while (end < low.length && !stopChars.includes(low.charAt(end))) end++;
+    const rawUrl = raw.slice(at2, end);
+    let host;
+    try {
+      host = new URL(rawUrl).hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+    if (!LOOPBACK_HOSTS.includes(host)) return false;
+    found++;
+    pos = end;
+  }
+  return found > 0;
+}
+function denyKind(c, ev) {
   const name = c.argv0.toLowerCase();
-  if (has(CURL_COMMANDS, name) && bodyReachesOutput(name, c)) return "curl";
-  if (inlineHttp(c.raw)) return "http";
+  const loopbackBypass = ev.agent === "antigravity" && onlyLoopbackHttp(c.raw);
+  if (has(CURL_COMMANDS, name) && bodyReachesOutput(name, c)) return loopbackBypass ? null : "curl";
+  if (inlineHttp(c.raw)) return loopbackBypass ? null : "http";
   if (has(BUILD_COMMANDS, name)) return "build";
   return null;
 }
@@ -6113,7 +6169,7 @@ function fileSize(abs) {
   }
 }
 function bigDeny(ev, row, cwd, p, size, root) {
-  const abs = resolve5(cwd, p);
+  const abs = resolve6(cwd, p);
   if (size <= OUTPUT_CAP || isOwnFile(ev.agent, cwd, p)) return null;
   return deny(executeCanOpen(root, abs) ? READ_DENY_MESSAGE(abs, size, row.toolNamePrefix) : READ_DENY_RANGE_MESSAGE(abs, size));
 }
@@ -6129,7 +6185,7 @@ function executeCanOpen(root, abs) {
 function read(ev, row, input, root) {
   if (!present(input.offset) && !present(input.limit)) {
     for (const p of readPaths(input)) {
-      const abs = resolve5(ev.cwd, p);
+      const abs = resolve6(ev.cwd, p);
       const size = fileSize(abs);
       if (size > OUTPUT_CAP && !isMediaRead(ev.agent, abs)) {
         const d = bigDeny(ev, row, ev.cwd, p, size, root);
@@ -6145,7 +6201,7 @@ function shellDump(ev, cmds, row, root) {
   let verdict = null;
   for (const c of cmds) {
     const name = c.argv0.toLowerCase();
-    if (name === CD_COMMAND && c.args.length === 1 && c.insideConstruct === void 0) dir = resolve5(dir, c.args[0]);
+    if (name === CD_COMMAND && c.args.length === 1 && c.insideConstruct === void 0) dir = resolve6(dir, c.args[0]);
     if (c.redirectsToFile || c.endsInBoundedSink || c.pipesOut === true || c.insideConstruct !== void 0) continue;
     if (!has(SHELL_DUMP_COMMANDS, name)) continue;
     const d = dumpTarget(name, c.args);
@@ -6154,7 +6210,7 @@ function shellDump(ev, cmds, row, root) {
       verdict = ALLOW;
       continue;
     }
-    const abs = resolve5(dir, d.file);
+    const abs = resolve6(dir, d.file);
     const big = bigDeny(ev, row, dir, d.file, fileSize(abs), root);
     if (big !== null) return big;
   }
@@ -6225,7 +6281,7 @@ function dumpTarget(name, args) {
 }
 
 // src/core/project/resolve.ts
-import { basename as basename2, dirname as dirname3, isAbsolute as isAbsolute3, join as join6, resolve as resolve6 } from "node:path";
+import { basename as basename2, dirname as dirname3, isAbsolute as isAbsolute4, join as join6, resolve as resolve7 } from "node:path";
 
 // src/core/project/sha256.ts
 var K = new Uint32Array([
@@ -6387,7 +6443,7 @@ function gitDirs(dir) {
     const gitDir = gitDirAt(join6(cur, GIT_DIR_NAME));
     if (gitDir !== null) {
       const common = firstLine(join6(gitDir, GIT_COMMONDIR_FILE));
-      return { commonDir: realpathSync3.native(common === null ? gitDir : resolve6(gitDir, common)), worktree: cur, start };
+      return { commonDir: realpathSync3.native(common === null ? gitDir : resolve7(gitDir, common)), worktree: cur, start };
     }
     const up = dirname3(cur);
     if (up === cur) return { commonDir: null, start };
@@ -6395,8 +6451,8 @@ function gitDirs(dir) {
   }
 }
 function nearestRealDir(dir) {
-  const walk2 = isAbsolute3(dir);
-  for (let d = walk2 ? resolve6(dir) : dir; ; ) {
+  const walk2 = isAbsolute4(dir);
+  for (let d = walk2 ? resolve7(dir) : dir; ; ) {
     try {
       return realpathSync3.native(d);
     } catch {
@@ -6414,7 +6470,7 @@ function gitDirAt(dotGit) {
     } else {
       const line = firstLine(dotGit);
       if (line === null || !line.startsWith(GITDIR_FILE_PREFIX)) return null;
-      gitDir = resolve6(dirname3(dotGit), line.slice(GITDIR_FILE_PREFIX.length));
+      gitDir = resolve7(dirname3(dotGit), line.slice(GITDIR_FILE_PREFIX.length));
     }
   } catch {
     return null;
@@ -6703,10 +6759,10 @@ function startArgv(argv) {
   return sh === null ? null : [sh, ...argv];
 }
 function runProcess(argv, o) {
-  return new Promise((resolve7) => {
+  return new Promise((resolve8) => {
     const isWin2 = process.platform === "win32";
     const start = startArgv(argv);
-    if (start === null) return resolve7(NOT_STARTED);
+    if (start === null) return resolve8(NOT_STARTED);
     let child;
     try {
       child = spawn2(start[0], start.slice(1), {
@@ -6720,7 +6776,7 @@ function runProcess(argv, o) {
         windowsHide: true
       });
     } catch {
-      return resolve7(NOT_STARTED);
+      return resolve8(NOT_STARTED);
     }
     const stdoutChunks = [];
     const stderrChunks = [];
@@ -6754,7 +6810,7 @@ function runProcess(argv, o) {
       clearTimeout(drainTimer);
       clearTimeout(stopTimer);
       o.signal.removeEventListener("abort", onAbort);
-      resolve7({
+      resolve8({
         stdout: Buffer.concat(stdoutChunks),
         stderr: Buffer.concat(stderrChunks),
         exitCode,

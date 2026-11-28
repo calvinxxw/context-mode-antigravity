@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, parse, resolve } from "node:path";
 import { z } from "zod/v4";
 import {
-  BACKGROUND_HOLD_NOTE, BACKGROUND_REPLY_PREFIX, CANCELLED_LINE, EXEC_LANGUAGES, EXEC_PREVIEW_BYTES, EXEC_TIMEOUT_MS, OUTPUT_CAP, PLAIN_OUTPUT_ENV, SHELL_FAMILY, SOURCE_LABEL_MAX_CHARS,
+  ANTIGRAVITY_EXEC_TIMEOUT_MS, BACKGROUND_HOLD_NOTE, BACKGROUND_REPLY_PREFIX, CANCELLED_LINE, EXEC_LANGUAGES, EXEC_PREVIEW_BYTES, EXEC_TIMEOUT_MS, OUTPUT_CAP, PLAIN_OUTPUT_ENV, SHELL_FAMILY, SOURCE_LABEL_MAX_CHARS,
 } from "../contracts/constants.ts";
 import { CtxError } from "../contracts/errors.ts";
 import type { ExecuteInput, JournalFacts, ToolContext, ToolReply } from "../contracts/types.ts";
@@ -191,7 +191,9 @@ async function handler(raw: ExecuteInput, ctx: ToolContext): Promise<ToolReply> 
   if (runtime === null) return fail(noRuntimeError(input.language).toLine());
   // Steps 6-7.
   const env = buildChildEnv(process.env, extra);
-  const timeoutMs = input.timeoutMs ?? EXEC_TIMEOUT_MS;
+  const effectiveAgent = ctx.agent ?? ctx.project.agent;
+  const maxTimeout = effectiveAgent === "antigravity" ? ANTIGRAVITY_EXEC_TIMEOUT_MS : EXEC_TIMEOUT_MS;
+  const timeoutMs = Math.min(input.timeoutMs ?? maxTimeout, maxTimeout);
   const journal: JournalFacts = { kind: "cmd", key: canonicalKey(TOOL, input.code), path: input.file ?? null, exit_code: null };
   let tmpDir: string | null = null;
   let handedOff = false;
@@ -217,7 +219,13 @@ async function handler(raw: ExecuteInput, ctx: ToolContext): Promise<ToolReply> 
     }
     // Steps 8, 10, 11.
     const r = await runProcess(argv, { cwd, env, signal: ctx.signal, timeoutMs });
-    if (r.killed === "timeout") return fail(new CtxError("TIMEOUT", { ms: timeoutMs }).toLine(), journal);
+    if (r.killed === "timeout") {
+      const head = new CtxError("TIMEOUT", { ms: timeoutMs }).toLine();
+      const partial = (decodeSandboxOutput(r.stdout) + decodeSandboxOutput(r.stderr)).trim();
+      if (partial === "") return fail(head, journal);
+      const preview = capBytes(partial, EXEC_PREVIEW_BYTES).text;
+      return fail(head + "\nPartial output before timeout:\n" + preview, journal);
+    }
     if (r.killed === "cancel") return fail(CANCELLED_LINE, journal);
     // D-M2-T10-4: no exit code = the process did not start (deleted cwd, runtime gone) or died by an
     // outside signal. One line, no fallback directory.
