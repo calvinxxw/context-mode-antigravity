@@ -1527,6 +1527,9 @@ var EDIT_TOOL_NAMES = Object.freeze([
 var POST_EDIT_TOOL_NAMES = Object.freeze([
   "mcp_agy-fast_fast_apply_edits"
 ]);
+var PRE_CONTEXT_TOOL_NAMES = Object.freeze([
+  "call_mcp_tool"
+]);
 var EVENT_MAP = Object.freeze({
   SessionStart: "SessionStart",
   UserPromptSubmit: "PreInvocation",

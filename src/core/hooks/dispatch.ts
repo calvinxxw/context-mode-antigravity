@@ -117,12 +117,17 @@ export async function handleHook(agent: AgentId, raw: unknown, env: NodeJS.Proce
   // Antigravity spawns plugin MCP servers with cwd = PLUGIN_ROOT and agy 1.5.x does not advertise MCP roots/list.
   // Record the real workspace cwd and conversationId on SessionStart, PreInvocation, and own ctx_* PreToolUse calls
   // (never on generic run_command/read_file PreToolUse so D5 hook-roundtrip and hook-sample probes stay clean and fast).
+  const isOwnAgyToolPre = ev.event === "PreToolUse" && (ev.tool?.canonicalName.startsWith(OWN_TOOL_PREFIX) ?? false);
   if (ev.agent === "antigravity" && (
     ev.event === "SessionStart"
     || ev.event === "UserPromptSubmit"
-    || (ev.event === "PreToolUse" && (ev.tool?.canonicalName.startsWith(OWN_TOOL_PREFIX) ?? false))
+    || isOwnAgyToolPre
   )) {
-    writeAntigravityContext(env, { cwd: isAbsolute(ev.cwd) ? ev.cwd : project.worktree, sessionId: ev.sessionId });
+    writeAntigravityContext(env, {
+      cwd: isAbsolute(ev.cwd) ? ev.cwd : project.worktree,
+      sessionId: ev.sessionId,
+      isOwnToolCall: isOwnAgyToolPre,
+    });
   }
   let decision: Decision;
   const settle: Settle = {};

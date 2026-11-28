@@ -7,7 +7,11 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { ADAPTERS, hasReplace } from "../src/adapters/table.ts";
 import { FAILURE_EVENT as CLAUDE_FAILURE_EVENT } from "../src/adapters/claude-code.ts";
-import { PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX, POST_EDIT_TOOL_NAMES as ANTIGRAVITY_POST_EDIT_TOOLS } from "../src/adapters/antigravity.ts";
+import {
+  PLUGIN_TOOL_NAME_PREFIX as ANTIGRAVITY_PLUGIN_TOOL_PREFIX,
+  POST_EDIT_TOOL_NAMES as ANTIGRAVITY_POST_EDIT_TOOLS,
+  PRE_CONTEXT_TOOL_NAMES as ANTIGRAVITY_PRE_CONTEXT_TOOLS,
+} from "../src/adapters/antigravity.ts";
 import type { AgentId } from "../src/core/contracts/agents.ts";
 import { ANTIGRAVITY_EAGER_TOOLS, ANTIGRAVITY_MCP_FILE, HOOKS_JSON_FILE, KIRO_TOOL_MATCHERS, NODE_MIN, RELEASE_SUMS_FILE, SERVER_KEY } from "../src/core/contracts/constants.ts";
 import type { AdapterRow } from "../src/core/contracts/types.ts";
@@ -76,6 +80,7 @@ const escapeRegExp = (s: string): string => s.replace(/[.*+?^${}()|[\]\\]/g, "\\
 export function buildMatcher(row: AdapterRow, event?: string): string {
   const names = Object.values(row.nativeTools).flat();
   const alts = [...names, escapeRegExp(row.toolNamePrefix) + OWN_TOOL_GLOB];
+  if (event === "PreToolUse" && row.id === "antigravity") alts.push(...ANTIGRAVITY_PRE_CONTEXT_TOOLS.map(escapeRegExp));
   if (event === "PostToolUse" && hasReplace(row)) alts.push(MCP_ANY_GLOB);
   if (event === "PostToolUse" && row.id === "antigravity") alts.push(...ANTIGRAVITY_POST_EDIT_TOOLS.map(escapeRegExp));
   return `^(${alts.join("|")})$`;

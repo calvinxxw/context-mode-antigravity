@@ -290,8 +290,17 @@ export async function startServer(argv: string[], env: NodeJS.ProcessEnv): Promi
       const baseCwd = agent === "antigravity" && fromRoots !== undefined
         ? fromRoots
         : workspaceCwdOf(meta, process.cwd(), process.argv[1], env);
+      const inputPath = typeof input === "object" && input !== null && !Array.isArray(input)
+        ? (typeof (input as Record<string, unknown>).file === "string" ? (input as Record<string, unknown>).file as string
+          : typeof (input as Record<string, unknown>).path === "string" ? (input as Record<string, unknown>).path as string
+            : undefined)
+        : undefined;
       const agyContext = agent === "antigravity"
-        ? readAntigravityContext(env, [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], process.argv[1] ? dirname(process.argv[1]) : undefined])
+        ? readAntigravityContext(
+          env,
+          [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], process.argv[1] ? dirname(process.argv[1]) : undefined],
+          { preferCwd: baseCwd || undefined, inputPath },
+        )
         : null;
       const callCwd = baseCwd !== "" ? baseCwd : (agyContext?.cwd ?? "");
       // D-1398-HOST-ROOTS-1: Codex sends its grants on every call; Claude Code's roots arrive on the MRTR retry.

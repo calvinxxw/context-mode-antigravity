@@ -11639,7 +11639,7 @@ var DECISION_ANSWERS_KEY = "answers";
 var DECISION_OPTION_KEY = "option";
 var DECISION_LABEL_JOIN = " | ";
 var RELEASE_REPO_URL = "https://github.com/mksglu/context-mode.git";
-var BUNDLE_SHA = true ? "999e9edc708e7bfcc1df34e8d10bd2051c952729" : void 0;
+var BUNDLE_SHA = true ? "b4fb515833becb9b2fa48b87c3d94114e2c01291" : void 0;
 var DOCTOR_CHECK_ORDER = Object.freeze(["D1", "D2", "D3", "D4", "D5", "D5b", "D6", "D7", "D8", "D9", "D10", "D11"]);
 var DOCTOR_LABEL = Object.freeze({
   D1: "version",
@@ -12451,7 +12451,7 @@ var CtxError = class extends Error {
 };
 
 // src/core/hooks/dispatch.ts
-import { dirname as dirname4, isAbsolute as isAbsolute6, join as join10, relative as relative3, resolve as resolve9, sep as sep3 } from "node:path";
+import { dirname as dirname4, isAbsolute as isAbsolute6, join as join10, relative as relative4, resolve as resolve9, sep as sep3 } from "node:path";
 
 // src/core/contracts/agents.ts
 var AGENT_IDS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "antigravity"];
@@ -12474,6 +12474,9 @@ var EDIT_TOOL_NAMES = Object.freeze([
 ]);
 var POST_EDIT_TOOL_NAMES = Object.freeze([
   "mcp_agy-fast_fast_apply_edits"
+]);
+var PRE_CONTEXT_TOOL_NAMES = Object.freeze([
+  "call_mcp_tool"
 ]);
 var EVENT_MAP = Object.freeze({
   SessionStart: "SessionStart",
@@ -16224,8 +16227,10 @@ function dumpTarget(name, args) {
 }
 
 // src/core/project/antigravity-context.ts
-import { isAbsolute as isAbsolute4, join as join6 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join6, relative as relative3 } from "node:path";
 var fs = process.getBuiltinModule("node:fs");
+var MAX_BY_CWD_ENTRIES = 32;
+var LAST_TOOL_FRESH_MS = 1e4;
 function realOrSame(p) {
   try {
     return fs.realpathSync.native(p);
@@ -16233,18 +16238,46 @@ function realOrSame(p) {
     return p;
   }
 }
+function normKey(p) {
+  const real3 = realOrSame(p);
+  return process.platform === "win32" ? real3.toLowerCase() : real3;
+}
 function isExcluded(cwd, excludeDirs) {
-  const target = realOrSame(cwd);
+  const target = normKey(cwd);
   for (const dir of excludeDirs) {
-    if (dir !== void 0 && dir !== "" && realOrSame(dir) === target) return true;
+    if (dir !== void 0 && dir !== "" && normKey(dir) === target) return true;
   }
   return false;
+}
+function isPathInside(rootDir, targetPath) {
+  const rel = relative3(normKey(rootDir), normKey(targetPath));
+  return rel === "" || !rel.startsWith("..") && !isAbsolute4(rel);
 }
 function sleepSync(ms) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 }
 function errCode(e) {
   return typeof e === "object" && e !== null && "code" in e ? String(e.code) : void 0;
+}
+function parseEntry(raw, excludeDirs) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const rec = raw;
+  const cwd = typeof rec.cwd === "string" ? rec.cwd : "";
+  if (cwd === "" || !isAbsolute4(cwd) || !fs.existsSync(cwd)) return null;
+  if (isExcluded(cwd, excludeDirs)) return null;
+  const sessionId = typeof rec.sessionId === "string" ? rec.sessionId : "";
+  const updatedAt = typeof rec.updatedAt === "number" && Number.isFinite(rec.updatedAt) ? rec.updatedAt : 0;
+  return { cwd, sessionId, updatedAt };
+}
+function readRawFile(env) {
+  try {
+    const file2 = antigravityContextPath(env);
+    if (file2 === null || !fs.existsSync(file2)) return null;
+    const raw = JSON.parse(fs.readFileSync(file2, "utf8"));
+    return typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : null;
+  } catch {
+    return null;
+  }
 }
 function antigravityContextPath(env) {
   try {
@@ -16253,19 +16286,43 @@ function antigravityContextPath(env) {
     return null;
   }
 }
-function readAntigravityContext(env, excludeDirs = []) {
+function readAntigravityContext(env, excludeDirs = [], opts = {}) {
   try {
-    const file2 = antigravityContextPath(env);
-    if (file2 === null || !fs.existsSync(file2)) return null;
-    const raw = JSON.parse(fs.readFileSync(file2, "utf8"));
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-    const rec = raw;
-    const cwd = typeof rec.cwd === "string" ? rec.cwd : "";
-    if (cwd === "" || !isAbsolute4(cwd) || !fs.existsSync(cwd)) return null;
-    if (isExcluded(cwd, [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], ...excludeDirs])) return null;
-    const sessionId = typeof rec.sessionId === "string" ? rec.sessionId : "";
-    const updatedAt = typeof rec.updatedAt === "number" && Number.isFinite(rec.updatedAt) ? rec.updatedAt : 0;
-    return { cwd, sessionId, updatedAt };
+    const rec = readRawFile(env);
+    if (rec === null) return null;
+    const allExcluded = [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], ...excludeDirs];
+    const byCwdEntries = [];
+    if (typeof rec.byCwd === "object" && rec.byCwd !== null && !Array.isArray(rec.byCwd)) {
+      for (const v of Object.values(rec.byCwd)) {
+        const parsed = parseEntry(v, allExcluded);
+        if (parsed !== null) byCwdEntries.push(parsed);
+      }
+    }
+    if (opts.preferCwd !== void 0 && opts.preferCwd !== "" && isAbsolute4(opts.preferCwd)) {
+      const wantKey = normKey(opts.preferCwd);
+      const hit = byCwdEntries.find((e) => normKey(e.cwd) === wantKey);
+      if (hit !== void 0) return hit;
+    }
+    if (opts.inputPath !== void 0 && opts.inputPath !== "" && isAbsolute4(opts.inputPath)) {
+      let best = null;
+      let bestLen = -1;
+      for (const entry of byCwdEntries) {
+        if (isPathInside(entry.cwd, opts.inputPath)) {
+          const len = normKey(entry.cwd).length;
+          if (len > bestLen || len === bestLen && best !== null && entry.updatedAt > best.updatedAt) {
+            best = entry;
+            bestLen = len;
+          }
+        }
+      }
+      if (best !== null) return best;
+    }
+    const now = opts.now ?? Date.now();
+    const lastTool = parseEntry(rec.lastTool, allExcluded);
+    if (lastTool !== null && now - lastTool.updatedAt <= LAST_TOOL_FRESH_MS) {
+      return lastTool;
+    }
+    return parseEntry(rec, allExcluded);
   } catch {
     return null;
   }
@@ -16277,11 +16334,40 @@ function writeAntigravityContext(env, input) {
     if (isExcluded(cwd, [env[ANTIGRAVITY_PLUGIN_ROOT_ENV]])) return;
     const file2 = antigravityContextPath(env);
     if (file2 === null) return;
-    const existing = readAntigravityContext(env);
-    if (existing !== null && existing.cwd === cwd && existing.sessionId === input.sessionId) return;
+    const now = Date.now();
+    const prev = readRawFile(env);
+    const excludeOwn = [env[ANTIGRAVITY_PLUGIN_ROOT_ENV]];
+    const byCwd = {};
+    if (prev !== null && typeof prev.byCwd === "object" && prev.byCwd !== null && !Array.isArray(prev.byCwd)) {
+      for (const v of Object.values(prev.byCwd)) {
+        const entry2 = parseEntry(v, excludeOwn);
+        if (entry2 !== null) byCwd[normKey(entry2.cwd)] = entry2;
+      }
+    } else if (prev !== null) {
+      const legacy = parseEntry(prev, excludeOwn);
+      if (legacy !== null) byCwd[normKey(legacy.cwd)] = legacy;
+    }
+    const entry = { cwd, sessionId: input.sessionId, updatedAt: now };
+    const key = normKey(cwd);
+    const prevEntry = byCwd[key];
+    const prevTop = prev !== null ? parseEntry(prev, excludeOwn) : null;
+    const prevLastTool = prev !== null ? parseEntry(prev.lastTool, excludeOwn) : null;
+    if (input.isOwnToolCall !== true && prevTop !== null && prevTop.cwd === cwd && prevTop.sessionId === input.sessionId && prevEntry !== void 0 && prevEntry.sessionId === input.sessionId) {
+      return;
+    }
+    byCwd[key] = entry;
+    const pruned = Object.entries(byCwd).sort((a, b) => b[1].updatedAt - a[1].updatedAt).slice(0, MAX_BY_CWD_ENTRIES);
+    const nextByCwd = Object.fromEntries(pruned);
+    const doc = {
+      cwd,
+      sessionId: input.sessionId,
+      updatedAt: now,
+      byCwd: nextByCwd,
+      ...input.isOwnToolCall === true ? { lastTool: entry } : prevLastTool !== null ? { lastTool: prevLastTool } : {}
+    };
     const dir = resolveConfigDir(env);
     fs.mkdirSync(dir, { recursive: true });
-    const payload = JSON.stringify({ cwd, sessionId: input.sessionId, updatedAt: Date.now() }) + "\n";
+    const payload = JSON.stringify(doc) + "\n";
     const tmp = join6(dir, `${ATOMIC_TMP_PREFIX}${ANTIGRAVITY_CONTEXT_FILE}${ATOMIC_TMP_MARK}${process.pid}`);
     try {
       fs.writeFileSync(tmp, payload);
@@ -21079,8 +21165,13 @@ async function handleHook(agent, raw, env) {
   } catch (err) {
     return fail7("project", err, "hooks: no project: " + String(err.code ?? "ERROR") + " " + message2(err) + "\n");
   }
-  if (ev.agent === "antigravity" && (ev.event === "SessionStart" || ev.event === "UserPromptSubmit" || ev.event === "PreToolUse" && (ev.tool?.canonicalName.startsWith(OWN_TOOL_PREFIX) ?? false))) {
-    writeAntigravityContext(env, { cwd: isAbsolute6(ev.cwd) ? ev.cwd : project.worktree, sessionId: ev.sessionId });
+  const isOwnAgyToolPre = ev.event === "PreToolUse" && (ev.tool?.canonicalName.startsWith(OWN_TOOL_PREFIX) ?? false);
+  if (ev.agent === "antigravity" && (ev.event === "SessionStart" || ev.event === "UserPromptSubmit" || isOwnAgyToolPre)) {
+    writeAntigravityContext(env, {
+      cwd: isAbsolute6(ev.cwd) ? ev.cwd : project.worktree,
+      sessionId: ev.sessionId,
+      isOwnToolCall: isOwnAgyToolPre
+    });
   }
   let decision;
   const settle3 = {};
@@ -21593,7 +21684,7 @@ function replaceBudget(handleLine, more) {
 function hostToolResult(file2, sessionId, env) {
   if (sessionId === "" || sessionId.includes(sep3) || sessionId.includes("/")) return false;
   const projects = join10(claudeDirOf(env, homeDirOf(env) ?? ""), PROJECTS_DIR_NAME);
-  const steps = relative3(projects, resolve9(file2)).split(sep3);
+  const steps = relative4(projects, resolve9(file2)).split(sep3);
   if (steps.length !== 4 || steps.includes("..") || steps.includes("")) return false;
   if (steps[1] !== sessionId || steps[2] !== CLAUDE_TOOL_RESULTS_DIR_NAME) return false;
   const st = lstatSync2(file2);
@@ -25876,7 +25967,7 @@ function piInstalledIn(env, home, pkgDir, cwd) {
 
 // src/core/ops/doctor-env.ts
 import { existsSync as existsSync9, readFileSync as readFileSync12, realpathSync as realpathSync6 } from "node:fs";
-import { isAbsolute as isAbsolute8, join as join16, relative as relative4 } from "node:path";
+import { isAbsolute as isAbsolute8, join as join16, relative as relative5 } from "node:path";
 function pass(id, detail = DOCTOR_PASS_DETAIL) {
   return { id, label: DOCTOR_LABEL[id], status: "PASS", detail };
 }
@@ -26044,7 +26135,7 @@ function checkMcp(ctx, adapter) {
 }
 function piCwdInside(worktree, piCwd) {
   if (piCwd === void 0 || !existsSync9(piCwd)) return false;
-  const rel = relative4(worktree, realpathSync6.native(piCwd));
+  const rel = relative5(worktree, realpathSync6.native(piCwd));
   return rel === "" || !rel.startsWith("..") && !isAbsolute8(rel);
 }
 function checkProject(i) {
@@ -26178,6 +26269,7 @@ function composeMatcher(row5, event) {
   const prefix = escape3(row5.toolNamePrefix);
   const names = Object.values(row5.nativeTools).flat();
   const alts = [...names, prefix + OWN_TOOL_PREFIX + MATCHER_ANY];
+  if (event === "PreToolUse" && row5.id === "antigravity") alts.push(...PRE_CONTEXT_TOOL_NAMES.map(escape3));
   if (event === POST_TOOL_USE && hasReplace(row5)) alts.push(MCP_ANY_MATCH);
   if (event === POST_TOOL_USE && row5.id === "antigravity") alts.push(...POST_EDIT_TOOL_NAMES.map(escape3));
   return MATCHER_OPEN + alts.join(MATCHER_ALT) + MATCHER_CLOSE;
@@ -30095,7 +30187,7 @@ var ctxExecute = {
 
 // src/core/tools/index.ts
 import { existsSync as existsSync19, readFileSync as readFileSync21, statSync as statSync10 } from "node:fs";
-import { dirname as dirname13, extname as extname3, join as join26, relative as relative5, resolve as resolve13 } from "node:path";
+import { dirname as dirname13, extname as extname3, join as join26, relative as relative6, resolve as resolve13 } from "node:path";
 
 // src/core/index/walk.ts
 import { readdirSync as readdirSync10, readFileSync as readFileSync19, realpathSync as realpathSync10, statSync as statSync9 } from "node:fs";
@@ -33745,11 +33837,11 @@ function compareDocumentPosition(nodeA, nodeB) {
 function uniqueSort(nodes) {
   nodes = nodes.filter((node3, index, array4) => !array4.includes(node3, index + 1));
   nodes.sort((a, b) => {
-    const relative6 = compareDocumentPosition(a, b);
-    if (relative6 & DocumentPosition.PRECEDING) {
+    const relative7 = compareDocumentPosition(a, b);
+    if (relative7 & DocumentPosition.PRECEDING) {
       return -1;
     }
-    if (relative6 & DocumentPosition.FOLLOWING) {
+    if (relative7 & DocumentPosition.FOLLOWING) {
       return 1;
     }
     return 0;
@@ -34364,7 +34456,7 @@ function pathItems(input, project, hostRoots) {
   const abs = resolve13(project.worktree, input.path);
   const allowed = allowedRootOf(project.containmentRoot, hostRoots, abs);
   if (allowed === void 0) throw missingOrOutside(input.path, abs, project.containmentRoot, hostRoots);
-  const base = relative5(project.worktree, abs);
+  const base = relative6(project.worktree, abs);
   if (statSync10(abs).isDirectory()) {
     return walkDir(abs, allowed).map((f) => ({
       sourceKind: "path",
@@ -57391,41 +57483,41 @@ var require_fast_uri = /* @__PURE__ */ __commonJSMin((exports, module) => {
     schemelessOptions.skipEscape = true;
     return serialize(resolved, schemelessOptions);
   }
-  function resolveComponent(base, relative6, options, skipNormalization) {
+  function resolveComponent(base, relative7, options, skipNormalization) {
     const target = {};
     if (!skipNormalization) {
       base = parse6(serialize(base, options), options);
-      relative6 = parse6(serialize(relative6, options), options);
+      relative7 = parse6(serialize(relative7, options), options);
     }
     options = options || {};
-    if (!options.tolerant && relative6.scheme) {
-      target.scheme = relative6.scheme;
-      target.userinfo = relative6.userinfo;
-      target.host = relative6.host;
-      target.port = relative6.port;
-      target.path = removeDotSegments(relative6.path || "");
-      target.query = relative6.query;
+    if (!options.tolerant && relative7.scheme) {
+      target.scheme = relative7.scheme;
+      target.userinfo = relative7.userinfo;
+      target.host = relative7.host;
+      target.port = relative7.port;
+      target.path = removeDotSegments(relative7.path || "");
+      target.query = relative7.query;
     } else {
-      if (relative6.userinfo !== void 0 || relative6.host !== void 0 || relative6.port !== void 0) {
-        target.userinfo = relative6.userinfo;
-        target.host = relative6.host;
-        target.port = relative6.port;
-        target.path = removeDotSegments(relative6.path || "");
-        target.query = relative6.query;
+      if (relative7.userinfo !== void 0 || relative7.host !== void 0 || relative7.port !== void 0) {
+        target.userinfo = relative7.userinfo;
+        target.host = relative7.host;
+        target.port = relative7.port;
+        target.path = removeDotSegments(relative7.path || "");
+        target.query = relative7.query;
       } else {
-        if (!relative6.path) {
+        if (!relative7.path) {
           target.path = base.path;
-          if (relative6.query !== void 0) target.query = relative6.query;
+          if (relative7.query !== void 0) target.query = relative7.query;
           else target.query = base.query;
         } else {
-          if (relative6.path[0] === "/") target.path = removeDotSegments(relative6.path);
+          if (relative7.path[0] === "/") target.path = removeDotSegments(relative7.path);
           else {
-            if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) target.path = "/" + relative6.path;
-            else if (!base.path) target.path = relative6.path;
-            else target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative6.path;
+            if ((base.userinfo !== void 0 || base.host !== void 0 || base.port !== void 0) && !base.path) target.path = "/" + relative7.path;
+            else if (!base.path) target.path = relative7.path;
+            else target.path = base.path.slice(0, base.path.lastIndexOf("/") + 1) + relative7.path;
             target.path = removeDotSegments(target.path);
           }
-          target.query = relative6.query;
+          target.query = relative7.query;
         }
         target.userinfo = base.userinfo;
         target.host = base.host;
@@ -57433,7 +57525,7 @@ var require_fast_uri = /* @__PURE__ */ __commonJSMin((exports, module) => {
       }
       target.scheme = base.scheme;
     }
-    target.fragment = relative6.fragment;
+    target.fragment = relative7.fragment;
     return target;
   }
   function equal(uriA, uriB, options) {
@@ -63764,7 +63856,12 @@ async function startServer(argv, env) {
       const fromRoots = agent === "vscode" && !hasWorkspaceFolder(argv) || agent === "antigravity" ? await workspaceFromRoots(server) : void 0;
       const callArgv = agent === "vscode" && fromRoots !== void 0 ? [...argv, WORKSPACE_FOLDER_FLAG, fromRoots] : argv;
       const baseCwd = agent === "antigravity" && fromRoots !== void 0 ? fromRoots : workspaceCwdOf(meta3, process.cwd(), process.argv[1], env);
-      const agyContext = agent === "antigravity" ? readAntigravityContext(env, [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], process.argv[1] ? dirname15(process.argv[1]) : void 0]) : null;
+      const inputPath = typeof input === "object" && input !== null && !Array.isArray(input) ? typeof input.file === "string" ? input.file : typeof input.path === "string" ? input.path : void 0 : void 0;
+      const agyContext = agent === "antigravity" ? readAntigravityContext(
+        env,
+        [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], process.argv[1] ? dirname15(process.argv[1]) : void 0],
+        { preferCwd: baseCwd || void 0, inputPath }
+      ) : null;
       const callCwd = baseCwd !== "" ? baseCwd : agyContext?.cwd ?? "";
       const fromInput = grantedFromInput(req.mcpReq.inputResponses);
       const hostRoots = [...grantedFromMeta(meta3), ...fromInput ?? []];

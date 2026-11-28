@@ -494,7 +494,7 @@ var DECISION_ANSWERS_KEY = "answers";
 var DECISION_OPTION_KEY = "option";
 var DECISION_LABEL_JOIN = " | ";
 var RELEASE_REPO_URL = "https://github.com/mksglu/context-mode.git";
-var BUNDLE_SHA = true ? "999e9edc708e7bfcc1df34e8d10bd2051c952729" : void 0;
+var BUNDLE_SHA = true ? "b4fb515833becb9b2fa48b87c3d94114e2c01291" : void 0;
 var DOCTOR_CHECK_ORDER = Object.freeze(["D1", "D2", "D3", "D4", "D5", "D5b", "D6", "D7", "D8", "D9", "D10", "D11"]);
 var DOCTOR_LABEL = Object.freeze({
   D1: "version",
@@ -1308,7 +1308,7 @@ var CtxError = class extends Error {
 };
 
 // src/core/hooks/dispatch.ts
-import { dirname as dirname4, isAbsolute as isAbsolute6, join as join10, relative as relative3, resolve as resolve9, sep as sep3 } from "node:path";
+import { dirname as dirname4, isAbsolute as isAbsolute6, join as join10, relative as relative4, resolve as resolve9, sep as sep3 } from "node:path";
 
 // src/core/contracts/agents.ts
 var AGENT_IDS = ["claude-code", "codex", "gemini", "qwen", "copilot-cli", "vscode", "kiro", "zcode", "pi", "opencode", "omp", "antigravity"];
@@ -1331,6 +1331,9 @@ var EDIT_TOOL_NAMES = Object.freeze([
 ]);
 var POST_EDIT_TOOL_NAMES = Object.freeze([
   "mcp_agy-fast_fast_apply_edits"
+]);
+var PRE_CONTEXT_TOOL_NAMES = Object.freeze([
+  "call_mcp_tool"
 ]);
 var EVENT_MAP = Object.freeze({
   SessionStart: "SessionStart",
@@ -5078,8 +5081,9 @@ function dumpTarget(name, args) {
 }
 
 // src/core/project/antigravity-context.ts
-import { isAbsolute as isAbsolute4, join as join6 } from "node:path";
+import { isAbsolute as isAbsolute4, join as join6, relative as relative3 } from "node:path";
 var fs = process.getBuiltinModule("node:fs");
+var MAX_BY_CWD_ENTRIES = 32;
 function realOrSame(p) {
   try {
     return fs.realpathSync.native(p);
@@ -5087,10 +5091,14 @@ function realOrSame(p) {
     return p;
   }
 }
+function normKey(p) {
+  const real3 = realOrSame(p);
+  return process.platform === "win32" ? real3.toLowerCase() : real3;
+}
 function isExcluded(cwd, excludeDirs) {
-  const target = realOrSame(cwd);
+  const target = normKey(cwd);
   for (const dir of excludeDirs) {
-    if (dir !== void 0 && dir !== "" && realOrSame(dir) === target) return true;
+    if (dir !== void 0 && dir !== "" && normKey(dir) === target) return true;
   }
   return false;
 }
@@ -5100,26 +5108,29 @@ function sleepSync(ms) {
 function errCode(e) {
   return typeof e === "object" && e !== null && "code" in e ? String(e.code) : void 0;
 }
-function antigravityContextPath(env) {
-  try {
-    return join6(resolveConfigDir(env), ANTIGRAVITY_CONTEXT_FILE);
-  } catch {
-    return null;
-  }
+function parseEntry(raw, excludeDirs) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
+  const rec = raw;
+  const cwd = typeof rec.cwd === "string" ? rec.cwd : "";
+  if (cwd === "" || !isAbsolute4(cwd) || !fs.existsSync(cwd)) return null;
+  if (isExcluded(cwd, excludeDirs)) return null;
+  const sessionId = typeof rec.sessionId === "string" ? rec.sessionId : "";
+  const updatedAt = typeof rec.updatedAt === "number" && Number.isFinite(rec.updatedAt) ? rec.updatedAt : 0;
+  return { cwd, sessionId, updatedAt };
 }
-function readAntigravityContext(env, excludeDirs = []) {
+function readRawFile(env) {
   try {
     const file2 = antigravityContextPath(env);
     if (file2 === null || !fs.existsSync(file2)) return null;
     const raw = JSON.parse(fs.readFileSync(file2, "utf8"));
-    if (typeof raw !== "object" || raw === null || Array.isArray(raw)) return null;
-    const rec = raw;
-    const cwd = typeof rec.cwd === "string" ? rec.cwd : "";
-    if (cwd === "" || !isAbsolute4(cwd) || !fs.existsSync(cwd)) return null;
-    if (isExcluded(cwd, [env[ANTIGRAVITY_PLUGIN_ROOT_ENV], ...excludeDirs])) return null;
-    const sessionId = typeof rec.sessionId === "string" ? rec.sessionId : "";
-    const updatedAt = typeof rec.updatedAt === "number" && Number.isFinite(rec.updatedAt) ? rec.updatedAt : 0;
-    return { cwd, sessionId, updatedAt };
+    return typeof raw === "object" && raw !== null && !Array.isArray(raw) ? raw : null;
+  } catch {
+    return null;
+  }
+}
+function antigravityContextPath(env) {
+  try {
+    return join6(resolveConfigDir(env), ANTIGRAVITY_CONTEXT_FILE);
   } catch {
     return null;
   }
@@ -5131,11 +5142,40 @@ function writeAntigravityContext(env, input) {
     if (isExcluded(cwd, [env[ANTIGRAVITY_PLUGIN_ROOT_ENV]])) return;
     const file2 = antigravityContextPath(env);
     if (file2 === null) return;
-    const existing = readAntigravityContext(env);
-    if (existing !== null && existing.cwd === cwd && existing.sessionId === input.sessionId) return;
+    const now = Date.now();
+    const prev = readRawFile(env);
+    const excludeOwn = [env[ANTIGRAVITY_PLUGIN_ROOT_ENV]];
+    const byCwd = {};
+    if (prev !== null && typeof prev.byCwd === "object" && prev.byCwd !== null && !Array.isArray(prev.byCwd)) {
+      for (const v of Object.values(prev.byCwd)) {
+        const entry2 = parseEntry(v, excludeOwn);
+        if (entry2 !== null) byCwd[normKey(entry2.cwd)] = entry2;
+      }
+    } else if (prev !== null) {
+      const legacy = parseEntry(prev, excludeOwn);
+      if (legacy !== null) byCwd[normKey(legacy.cwd)] = legacy;
+    }
+    const entry = { cwd, sessionId: input.sessionId, updatedAt: now };
+    const key = normKey(cwd);
+    const prevEntry = byCwd[key];
+    const prevTop = prev !== null ? parseEntry(prev, excludeOwn) : null;
+    const prevLastTool = prev !== null ? parseEntry(prev.lastTool, excludeOwn) : null;
+    if (input.isOwnToolCall !== true && prevTop !== null && prevTop.cwd === cwd && prevTop.sessionId === input.sessionId && prevEntry !== void 0 && prevEntry.sessionId === input.sessionId) {
+      return;
+    }
+    byCwd[key] = entry;
+    const pruned = Object.entries(byCwd).sort((a, b) => b[1].updatedAt - a[1].updatedAt).slice(0, MAX_BY_CWD_ENTRIES);
+    const nextByCwd = Object.fromEntries(pruned);
+    const doc = {
+      cwd,
+      sessionId: input.sessionId,
+      updatedAt: now,
+      byCwd: nextByCwd,
+      ...input.isOwnToolCall === true ? { lastTool: entry } : prevLastTool !== null ? { lastTool: prevLastTool } : {}
+    };
     const dir = resolveConfigDir(env);
     fs.mkdirSync(dir, { recursive: true });
-    const payload = JSON.stringify({ cwd, sessionId: input.sessionId, updatedAt: Date.now() }) + "\n";
+    const payload = JSON.stringify(doc) + "\n";
     const tmp = join6(dir, `${ATOMIC_TMP_PREFIX}${ANTIGRAVITY_CONTEXT_FILE}${ATOMIC_TMP_MARK}${process.pid}`);
     try {
       fs.writeFileSync(tmp, payload);
@@ -9933,8 +9973,13 @@ async function handleHook(agent, raw, env) {
   } catch (err) {
     return fail7("project", err, "hooks: no project: " + String(err.code ?? "ERROR") + " " + message2(err) + "\n");
   }
-  if (ev.agent === "antigravity" && (ev.event === "SessionStart" || ev.event === "UserPromptSubmit" || ev.event === "PreToolUse" && (ev.tool?.canonicalName.startsWith(OWN_TOOL_PREFIX) ?? false))) {
-    writeAntigravityContext(env, { cwd: isAbsolute6(ev.cwd) ? ev.cwd : project.worktree, sessionId: ev.sessionId });
+  const isOwnAgyToolPre = ev.event === "PreToolUse" && (ev.tool?.canonicalName.startsWith(OWN_TOOL_PREFIX) ?? false);
+  if (ev.agent === "antigravity" && (ev.event === "SessionStart" || ev.event === "UserPromptSubmit" || isOwnAgyToolPre)) {
+    writeAntigravityContext(env, {
+      cwd: isAbsolute6(ev.cwd) ? ev.cwd : project.worktree,
+      sessionId: ev.sessionId,
+      isOwnToolCall: isOwnAgyToolPre
+    });
   }
   let decision;
   const settle = {};
@@ -10447,7 +10492,7 @@ function replaceBudget(handleLine, more) {
 function hostToolResult(file2, sessionId, env) {
   if (sessionId === "" || sessionId.includes(sep3) || sessionId.includes("/")) return false;
   const projects = join10(claudeDirOf(env, homeDirOf(env) ?? ""), PROJECTS_DIR_NAME);
-  const steps = relative3(projects, resolve9(file2)).split(sep3);
+  const steps = relative4(projects, resolve9(file2)).split(sep3);
   if (steps.length !== 4 || steps.includes("..") || steps.includes("")) return false;
   if (steps[1] !== sessionId || steps[2] !== CLAUDE_TOOL_RESULTS_DIR_NAME) return false;
   const st = lstatSync2(file2);
@@ -25869,7 +25914,7 @@ function piInstalledIn(env, home, pkgDir, cwd) {
 
 // src/core/ops/doctor-env.ts
 import { existsSync as existsSync9, readFileSync as readFileSync12, realpathSync as realpathSync6 } from "node:fs";
-import { isAbsolute as isAbsolute8, join as join16, relative as relative4 } from "node:path";
+import { isAbsolute as isAbsolute8, join as join16, relative as relative5 } from "node:path";
 function pass(id2, detail = DOCTOR_PASS_DETAIL) {
   return { id: id2, label: DOCTOR_LABEL[id2], status: "PASS", detail };
 }
@@ -26037,7 +26082,7 @@ function checkMcp(ctx, adapter) {
 }
 function piCwdInside(worktree, piCwd) {
   if (piCwd === void 0 || !existsSync9(piCwd)) return false;
-  const rel = relative4(worktree, realpathSync6.native(piCwd));
+  const rel = relative5(worktree, realpathSync6.native(piCwd));
   return rel === "" || !rel.startsWith("..") && !isAbsolute8(rel);
 }
 function checkProject(i) {
@@ -26171,6 +26216,7 @@ function composeMatcher(row5, event) {
   const prefix = escape2(row5.toolNamePrefix);
   const names = Object.values(row5.nativeTools).flat();
   const alts = [...names, prefix + OWN_TOOL_PREFIX + MATCHER_ANY];
+  if (event === "PreToolUse" && row5.id === "antigravity") alts.push(...PRE_CONTEXT_TOOL_NAMES.map(escape2));
   if (event === POST_TOOL_USE && hasReplace(row5)) alts.push(MCP_ANY_MATCH);
   if (event === POST_TOOL_USE && row5.id === "antigravity") alts.push(...POST_EDIT_TOOL_NAMES.map(escape2));
   return MATCHER_OPEN + alts.join(MATCHER_ALT) + MATCHER_CLOSE;
@@ -30078,7 +30124,7 @@ var ctxExecute = {
 
 // src/core/tools/index.ts
 import { existsSync as existsSync19, readFileSync as readFileSync21, statSync as statSync10 } from "node:fs";
-import { dirname as dirname13, extname as extname3, join as join26, relative as relative5, resolve as resolve13 } from "node:path";
+import { dirname as dirname13, extname as extname3, join as join26, relative as relative6, resolve as resolve13 } from "node:path";
 
 // src/core/index/walk.ts
 import { readdirSync as readdirSync10, readFileSync as readFileSync19, realpathSync as realpathSync10, statSync as statSync9 } from "node:fs";
@@ -33728,11 +33774,11 @@ function compareDocumentPosition(nodeA, nodeB) {
 function uniqueSort(nodes) {
   nodes = nodes.filter((node, index, array2) => !array2.includes(node, index + 1));
   nodes.sort((a, b) => {
-    const relative6 = compareDocumentPosition(a, b);
-    if (relative6 & DocumentPosition.PRECEDING) {
+    const relative7 = compareDocumentPosition(a, b);
+    if (relative7 & DocumentPosition.PRECEDING) {
       return -1;
     }
-    if (relative6 & DocumentPosition.FOLLOWING) {
+    if (relative7 & DocumentPosition.FOLLOWING) {
       return 1;
     }
     return 0;
@@ -34347,7 +34393,7 @@ function pathItems(input, project, hostRoots) {
   const abs = resolve13(project.worktree, input.path);
   const allowed = allowedRootOf(project.containmentRoot, hostRoots, abs);
   if (allowed === void 0) throw missingOrOutside(input.path, abs, project.containmentRoot, hostRoots);
-  const base = relative5(project.worktree, abs);
+  const base = relative6(project.worktree, abs);
   if (statSync10(abs).isDirectory()) {
     return walkDir(abs, allowed).map((f) => ({
       sourceKind: "path",

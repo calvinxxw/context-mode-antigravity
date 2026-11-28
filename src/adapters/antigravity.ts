@@ -25,6 +25,11 @@ export const EDIT_TOOL_NAMES: readonly string[] = Object.freeze([
 export const POST_EDIT_TOOL_NAMES: readonly string[] = Object.freeze([
   "mcp_agy-fast_fast_apply_edits",
 ]);
+// Antigravity lazy MCP dispatcher matched on PreToolUse so lazy ctx_* tools (ctx_stats, ctx_doctor, ctx_upgrade, ctx_purge)
+// refresh antigravity-context.json with the active window's cwd/conversationId immediately before MCP execution.
+export const PRE_CONTEXT_TOOL_NAMES: readonly string[] = Object.freeze([
+  "call_mcp_tool",
+]);
 
 export const EVENT_MAP: Readonly<Record<CanonicalEventName, string>> = Object.freeze({
   SessionStart: "SessionStart",

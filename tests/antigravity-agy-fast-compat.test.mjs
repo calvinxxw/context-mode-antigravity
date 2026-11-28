@@ -4,13 +4,14 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { buildMatcher } from "../build/manifests.ts";
-import { decode, POST_EDIT_TOOL_NAMES } from "../src/adapters/antigravity.ts";
+import { decode, POST_EDIT_TOOL_NAMES, PRE_CONTEXT_TOOL_NAMES } from "../src/adapters/antigravity.ts";
 import { getAdapter } from "../src/adapters/table.ts";
 import { ANTIGRAVITY_EXEC_TIMEOUT_MS } from "../src/core/contracts/constants.ts";
 import { handleHook } from "../src/core/hooks/dispatch.ts";
 import { readSessionEvents } from "../src/core/journal/read.ts";
 import { composeMatcher } from "../src/core/ops/doctor-config.ts";
 import { decide } from "../src/core/policy/decide.ts";
+import { readAntigravityContext, writeAntigravityContext } from "../src/core/project/antigravity-context.ts";
 import { resolveProject } from "../src/core/project/resolve.ts";
 import { closeDb, openDb } from "../src/core/store/db.ts";
 import { ctxExecute } from "../src/core/tools/execute.ts";
@@ -230,5 +231,73 @@ describe("Antigravity × agy-fast compatibility patches", () => {
       work,
     );
     assert.equal(codexDeny.kind, "deny");
+  });
+
+  test("Multi-window isolation: call_mcp_tool refreshes lastTool and byCwd prevents cross-workspace clobbering", async (t) => {
+    const row = getAdapter("antigravity");
+    const preBuild = buildMatcher(row, "PreToolUse");
+    assert.equal(preBuild, composeMatcher(row, "PreToolUse"));
+    for (const toolName of PRE_CONTEXT_TOOL_NAMES) {
+      assert.equal(new RegExp(preBuild).test(toolName), true, `PreToolUse must match ${toolName}`);
+    }
+
+    const workA = tmp(t);
+    const workB = tmp(t);
+    const dataDir = tmp(t);
+    const env = { ...process.env, CONTEXT_MODE_DATA_DIR: dataDir };
+
+    // 1. Window A calls lazy ctx_stats via call_mcp_tool -> PreToolUse stamps lastTool + byCwd[workA]
+    await handleHook("antigravity", {
+      hookEventName: "PreToolUse",
+      conversationId: "sess-window-A",
+      cwd: workA,
+      toolCall: {
+        name: "call_mcp_tool",
+        args: { ServerName: "context-mode_context-mode", ToolName: "ctx_stats", Arguments: {} },
+      },
+    }, env);
+
+    // 2. Window B concurrently fires PreInvocation (idle prompt/session activity) in workB
+    await handleHook("antigravity", {
+      hookEventName: "PreInvocation",
+      conversationId: "sess-window-B",
+      cwd: workB,
+      lastUserInput: "window B prompt",
+    }, env);
+
+    // 3. Window A's MCP server executes ctx_stats immediately after -> fresh lastTool beats Window B's PreInvocation!
+    const ctxForActiveCall = readAntigravityContext(env, []);
+    assert.equal(ctxForActiveCall?.cwd, workA);
+    assert.equal(ctxForActiveCall?.sessionId, "sess-window-A");
+
+    // 4. Even after lastTool expires (>10s), preferCwd and inputPath still resolve each window cleanly from byCwd
+    const future = Date.now() + 60_000;
+    const byPreferA = readAntigravityContext(env, [], { preferCwd: workA, now: future });
+    assert.equal(byPreferA?.sessionId, "sess-window-A");
+    const byPreferB = readAntigravityContext(env, [], { preferCwd: workB, now: future });
+    assert.equal(byPreferB?.sessionId, "sess-window-B");
+
+    const byInputPathA = readAntigravityContext(env, [], { inputPath: path.join(workA, "logs", "app.log"), now: future });
+    assert.equal(byInputPathA?.cwd, workA);
+    assert.equal(byInputPathA?.sessionId, "sess-window-A");
+
+    // 5. Non-own call_mcp_tool (e.g. Playwright) must NOT overwrite lastTool
+    await handleHook("antigravity", {
+      hookEventName: "PreToolUse",
+      conversationId: "sess-window-B",
+      cwd: workB,
+      toolCall: {
+        name: "call_mcp_tool",
+        args: { ServerName: "playwright", ToolName: "browser_navigate", Arguments: { url: "https://example.com" } },
+      },
+    }, env);
+    const stillA = readAntigravityContext(env, []);
+    assert.equal(stillA?.cwd, workA);
+    assert.equal(stillA?.sessionId, "sess-window-A");
+
+    // 6. Direct writeAntigravityContext preserves existing byCwd entries
+    writeAntigravityContext(env, { cwd: workB, sessionId: "sess-window-B-2", isOwnToolCall: true });
+    assert.equal(readAntigravityContext(env, [], { preferCwd: workA })?.sessionId, "sess-window-A");
+    assert.equal(readAntigravityContext(env, [])?.sessionId, "sess-window-B-2");
   });
 });

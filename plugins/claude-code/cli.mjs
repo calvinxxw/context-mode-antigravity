@@ -1544,6 +1544,9 @@ var EDIT_TOOL_NAMES = Object.freeze([
 var POST_EDIT_TOOL_NAMES = Object.freeze([
   "mcp_agy-fast_fast_apply_edits"
 ]);
+var PRE_CONTEXT_TOOL_NAMES = Object.freeze([
+  "call_mcp_tool"
+]);
 var EVENT_MAP = Object.freeze({
   SessionStart: "SessionStart",
   UserPromptSubmit: "PreInvocation",
@@ -8565,6 +8568,7 @@ function composeMatcher(row, event) {
   const prefix = escape(row.toolNamePrefix);
   const names = Object.values(row.nativeTools).flat();
   const alts = [...names, prefix + OWN_TOOL_PREFIX + MATCHER_ANY];
+  if (event === "PreToolUse" && row.id === "antigravity") alts.push(...PRE_CONTEXT_TOOL_NAMES.map(escape));
   if (event === POST_TOOL_USE && hasReplace(row)) alts.push(MCP_ANY_MATCH);
   if (event === POST_TOOL_USE && row.id === "antigravity") alts.push(...POST_EDIT_TOOL_NAMES.map(escape));
   return MATCHER_OPEN + alts.join(MATCHER_ALT) + MATCHER_CLOSE;
